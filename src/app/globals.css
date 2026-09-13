@@ -1,0 +1,165 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Light Theme (Default: Warm Ivory & Botanical Green) */
+  --color-bg-primary: #FBFBFA;
+  --color-bg-subtle: #F4F5F1;
+  --color-surface-default: #FFFFFF;
+  --color-surface-secondary: #F3F5F1;
+  --color-surface-elevated: #FFFFFF;
+
+  --color-primary: #1B4332;
+  --color-primary-hover: #143326;
+  --color-primary-pressed: #0F261D;
+  --color-primary-soft: #E8F5E9;
+  --color-primary-content: #FFFFFF;
+
+  --color-text-primary: #18231C;
+  --color-text-secondary: #526358;
+  --color-text-muted: #8B9C91;
+  --color-text-disabled: #BAC7BE;
+
+  --color-border-default: #E5E8E2;
+  --color-border-subtle: #EFF1ED;
+
+  --color-income: #2B6CB0;
+  --color-income-soft: #EBF8FF;
+  --color-warning: #D97706;
+  --color-warning-soft: #FEF3C7;
+  --color-danger: #DC2626;
+  --color-danger-soft: #FEE2E2;
+
+  --color-heat-low: #E8F5E9;
+  --color-heat-low-text: #2D6A4F;
+  --color-heat-medium: #FEF3C7;
+  --color-heat-medium-text: #B45309;
+  --color-heat-high: #FEE2E2;
+  --color-heat-high-text: #B91C1C;
+
+  --shadow-soft: 0 2px 10px -2px rgba(24, 35, 28, 0.04), 0 4px 16px -4px rgba(24, 35, 28, 0.06);
+  --shadow-card: 0 4px 20px -2px rgba(24, 35, 28, 0.05), 0 2px 8px -1px rgba(24, 35, 28, 0.03);
+  --shadow-floating: 0 10px 30px -4px rgba(24, 35, 28, 0.12), 0 4px 12px -2px rgba(24, 35, 28, 0.06);
+  --shadow-sheet: 0 -8px 32px -4px rgba(24, 35, 28, 0.12);
+}
+
+/* Heatmap Theme: Classic (Warm Amber / Orange) */
+[data-heatmap="classic"] {
+  --color-heat-low: #FEF3C7;
+  --color-heat-low-text: #B45309;
+  --color-heat-medium: #FED7AA;
+  --color-heat-medium-text: #C2410C;
+  --color-heat-high: #FEE2E2;
+  --color-heat-high-text: #B91C1C;
+}
+
+/* Heatmap Theme: Ocean (Cool Blue / Indigo) */
+[data-heatmap="ocean"] {
+  --color-heat-low: #E0F2FE;
+  --color-heat-low-text: #0369A1;
+  --color-heat-medium: #BAE6FD;
+  --color-heat-medium-text: #0284C7;
+  --color-heat-high: #E0E7FF;
+  --color-heat-high-text: #4338CA;
+}
+
+.dark {
+  /* Dark Theme (Deep Charcoal Forest Green) */
+  --color-bg-primary: #121815;
+  --color-bg-subtle: #17201C;
+  --color-surface-default: #1B2420;
+  --color-surface-secondary: #222E28;
+  --color-surface-elevated: #283630;
+
+  --color-primary: #52B788;
+  --color-primary-hover: #40916C;
+  --color-primary-pressed: #2D6A4F;
+  --color-primary-soft: #1A382A;
+  --color-primary-content: #0C1A13;
+
+  --color-text-primary: #F1F5F3;
+  --color-text-secondary: #9AAEA2;
+  --color-text-muted: #6B7F74;
+  --color-text-disabled: #46554D;
+
+  --color-border-default: #2A3831;
+  --color-border-subtle: #212C27;
+
+  --color-income: #63B3ED;
+  --color-income-soft: #1A365D;
+  --color-warning: #F6AD55;
+  --color-warning-soft: #4C2D04;
+  --color-danger: #FC8181;
+  --color-danger-soft: #4D1A1A;
+
+  --color-heat-low: #1B3526;
+  --color-heat-low-text: #74C69D;
+  --color-heat-medium: #3E2F09;
+  --color-heat-medium-text: #FCD34D;
+  --color-heat-high: #411717;
+  --color-heat-high-text: #FCA5A5;
+
+  --shadow-soft: 0 2px 10px -2px rgba(0, 0, 0, 0.3);
+  --shadow-card: 0 4px 20px -2px rgba(0, 0, 0, 0.4);
+  --shadow-floating: 0 10px 30px -4px rgba(0, 0, 0, 0.5);
+  --shadow-sheet: 0 -8px 32px -4px rgba(0, 0, 0, 0.6);
+}
+
+.dark[data-heatmap="classic"],
+.dark [data-heatmap="classic"] {
+  --color-heat-low: #3E2F09;
+  --color-heat-low-text: #FCD34D;
+  --color-heat-medium: #431407;
+  --color-heat-medium-text: #FB923C;
+  --color-heat-high: #411717;
+  --color-heat-high-text: #FCA5A5;
+}
+
+.dark[data-heatmap="ocean"],
+.dark [data-heatmap="ocean"] {
+  --color-heat-low: #0C2B4E;
+  --color-heat-low-text: #7DD3FC;
+  --color-heat-medium: #1E3A8A;
+  --color-heat-medium-text: #93C5FD;
+  --color-heat-high: #312E81;
+  --color-heat-high-text: #A5B4FC;
+}
+
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--color-bg-subtle);
+  color: var(--color-text-primary);
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+input,
+textarea,
+button {
+  user-select: auto;
+  -webkit-user-select: auto;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border-default);
+  border-radius: 9999px;
+}
