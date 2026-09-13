@@ -51,6 +51,8 @@ const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   TrendingUp,
 };
 
+import { sortCategoryTransactions } from '@/lib/calculations/financial';
+
 export function CategoryDetailSheet({
   isOpen,
   onClose,
@@ -60,14 +62,17 @@ export function CategoryDetailSheet({
   monthLabel,
   onSelectTransaction,
 }: CategoryDetailSheetProps) {
+  const [sortMode, setSortMode] = React.useState<'spending' | 'date'>('spending');
+
   if (!category || !categoryStat) return null;
 
   const IconComponent = ICON_MAP[category.icon] || MoreHorizontal;
   const color = category.color || '#1B4332';
 
-  // Sắp xếp giao dịch giảm dần theo ngày
-  const sortedTransactions = [...transactions].sort(
-    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+  // Sắp xếp giao dịch theo Tổng tiền hoặc Thời gian
+  const sortedTransactions = sortCategoryTransactions(
+    transactions,
+    sortMode === 'spending' ? 'amount' : 'date'
   );
 
   return (
@@ -109,9 +114,37 @@ export function CategoryDetailSheet({
 
         {/* Danh Sách Giao Dịch Trong Danh Mục */}
         <div className="flex flex-col gap-2">
-          <span className="text-xs font-black uppercase tracking-wider text-text-primary px-1">
-            Danh Sách Chi Tiêu ({sortedTransactions.length})
-          </span>
+          <div className="flex items-center justify-between px-1">
+            <span className="text-xs font-black uppercase tracking-wider text-text-primary">
+              Danh Sách Chi Tiêu ({sortedTransactions.length})
+            </span>
+
+            {/* Compact sort control */}
+            <div className="flex items-center gap-1 bg-surface-secondary p-0.5 rounded-xl border border-border/60 text-[10px] font-bold">
+              <button
+                type="button"
+                onClick={() => setSortMode('spending')}
+                className={`px-2 py-0.5 rounded-lg transition-all ${
+                  sortMode === 'spending'
+                    ? 'bg-surface text-primary shadow-xs'
+                    : 'text-text-muted hover:text-text-primary'
+                }`}
+              >
+                Số tiền
+              </button>
+              <button
+                type="button"
+                onClick={() => setSortMode('date')}
+                className={`px-2 py-0.5 rounded-lg transition-all ${
+                  sortMode === 'date'
+                    ? 'bg-surface text-primary shadow-xs'
+                    : 'text-text-muted hover:text-text-primary'
+                }`}
+              >
+                Mới nhất
+              </button>
+            </div>
+          </div>
 
           {sortedTransactions.length === 0 ? (
             <div className="p-6 rounded-2xl bg-surface dark:bg-surface-elevated border border-border/80 text-center text-xs text-text-muted">

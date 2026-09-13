@@ -3,6 +3,7 @@
 import React from 'react';
 import { CategoryTotal } from '@/types/calculations';
 import { formatCurrency } from '@/lib/utils/currency';
+import { sortCategoryTotals } from '@/lib/calculations/financial';
 import { ChevronRight, Layers } from 'lucide-react';
 import {
   Utensils,
@@ -47,7 +48,12 @@ export function CategoryBreakdownList({
   selectedCategoryId,
   onSelectCategory,
 }: CategoryBreakdownListProps) {
+  const [sortBy, setSortBy] = React.useState<'spending' | 'frequency'>('spending');
   const activeTotals = categoryTotals.filter((c) => c.totalAmount > 0);
+
+  const sortedTotals = React.useMemo(() => {
+    return sortCategoryTotals(activeTotals, sortBy);
+  }, [activeTotals, sortBy]);
 
   if (activeTotals.length === 0) {
     return null;
@@ -60,13 +66,36 @@ export function CategoryBreakdownList({
           <Layers className="w-3.5 h-3.5 text-primary" />
           <span>Cơ Cấu Chi Tiêu</span>
         </div>
-        <span className="text-[11px] font-bold text-text-muted">
-          {activeTotals.length} danh mục
-        </span>
+
+        {/* Compact sort control */}
+        <div className="flex items-center gap-1 bg-surface-secondary/80 p-0.5 rounded-xl border border-border/60 text-[10px] font-bold">
+          <button
+            type="button"
+            onClick={() => setSortBy('spending')}
+            className={`px-2 py-0.5 rounded-lg transition-all ${
+              sortBy === 'spending'
+                ? 'bg-surface text-primary shadow-xs'
+                : 'text-text-muted hover:text-text-primary'
+            }`}
+          >
+            Tổng tiền
+          </button>
+          <button
+            type="button"
+            onClick={() => setSortBy('frequency')}
+            className={`px-2 py-0.5 rounded-lg transition-all ${
+              sortBy === 'frequency'
+                ? 'bg-surface text-primary shadow-xs'
+                : 'text-text-muted hover:text-text-primary'
+            }`}
+          >
+            Số lần
+          </button>
+        </div>
       </div>
 
       <div className="flex flex-col gap-2">
-        {activeTotals.map((cat) => {
+        {sortedTotals.map((cat) => {
           const IconComponent = ICON_MAP[cat.categoryIcon] || MoreHorizontal;
           const isSelected = selectedCategoryId === cat.categoryId;
 

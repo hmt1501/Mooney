@@ -38,3 +38,29 @@ export interface MonthlyRecap {
   } | null;
   transactionCount: number;
 }
+
+export type SpendingPaceStatus = 'slow' | 'normal' | 'fast' | 'warning';
+
+export interface SpendingPaceResult {
+  status: SpendingPaceStatus;
+  message: string;
+  subMessage?: string;
+  expectedDailySpending: number;
+  actualDailySpending: number;
+  ratio: number;
+}
+
+export interface MonthlyIncomeSummary {
+  month: string; // 'YYYY-MM'
+  total: number; // Tổng dự tính trong tháng
+  realized: number; // Đã nhận trong tháng (Khả dụng)
+  upcoming: number; // Sắp nhận trong tháng
+  totalReceived: number; // Tương thích ngược với realized
+  totalUpcoming: number; // Tương thích ngược với upcoming
+  recurringTotal: number;
+  oneTimeTotal: number;
+  count: number;
+}
+
+export type CategorySortOption = 'spending' | 'frequency';
+

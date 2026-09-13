@@ -13,7 +13,20 @@ import {
   CreateBillInput,
   UpdateBillInput,
 } from '@/types/bill';
+import {
+  IncomeItem,
+  CreateIncomeInput,
+  UpdateIncomeInput,
+} from '@/types/income';
 import { UserSettings, UpdateSettingsInput } from '@/types/settings';
+
+export interface IIncomeRepository {
+  getAll(): Promise<IncomeItem[]>;
+  getById(id: string): Promise<IncomeItem | null>;
+  create(input: CreateIncomeInput): Promise<IncomeItem>;
+  update(id: string, input: UpdateIncomeInput): Promise<IncomeItem>;
+  delete(id: string): Promise<boolean>;
+}
 
 export interface ITransactionRepository {
   getAll(): Promise<Transaction[]>;
@@ -63,6 +76,7 @@ export interface ExportDataStructure {
   categories: Category[];
   transactions: Transaction[];
   recurringBills: RecurringBill[];
+  incomes?: IncomeItem[];
 }
 
 export interface IDataManagementRepository {

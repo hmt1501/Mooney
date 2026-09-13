@@ -1,6 +1,11 @@
 export type ThemeMode = 'light' | 'dark' | 'system';
 export type HeatmapTheme = 'classic' | 'forest' | 'ocean';
 
+export interface SpendingLevelConfig {
+  lowMax: number;     // Mặc định: 100_000 đ
+  mediumMax: number;  // Mặc định: 500_000 đ
+}
+
 export interface UserSettings {
   /**
    * Số dư ban đầu (Starting Balance).
@@ -10,6 +15,7 @@ export interface UserSettings {
   currency: string; // Mặc định 'VND'
   theme: ThemeMode;
   heatmapTheme: HeatmapTheme;
+  spendingLevels?: SpendingLevelConfig;
   updatedAt: string;
 }
 
@@ -18,4 +24,5 @@ export interface UpdateSettingsInput {
   currency?: string;
   theme?: ThemeMode;
   heatmapTheme?: HeatmapTheme;
+  spendingLevels?: SpendingLevelConfig;
 }

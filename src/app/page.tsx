@@ -1,40 +1,46 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { useMooneyData } from '@/hooks/useMooneyData';
 import { useToast } from '@/components/common/ToastContext';
 import { MonthSelector } from '@/components/home/MonthSelector';
-import { AvailableBalanceCard } from '@/components/home/AvailableBalanceCard';
-import { SafeSpendingCard } from '@/components/home/SafeSpendingCard';
+import { AvailableMoneyBanner } from '@/components/home/AvailableMoneyBanner';
 import { FinancialCalendar } from '@/components/calendar/FinancialCalendar';
+import { SpendingLevelModal } from '@/components/calendar/SpendingLevelModal';
 import { UpcomingBillsPreview } from '@/components/home/UpcomingBillsPreview';
 import { DailyDetailSheet } from '@/components/transaction/DailyDetailSheet';
 import { TransactionFormSheet } from '@/components/transaction/TransactionFormSheet';
 import { Modal } from '@/components/common/Modal';
 import { LoadingState } from '@/components/common/LoadingState';
 import { toDateString } from '@/lib/utils/date';
-import { calculateSafeDailySpending } from '@/lib/calculations/financial';
+import { calculateSafeDailySpending, calculateSpendingPace } from '@/lib/calculations/financial';
+import { getDaysInMonth } from '@/lib/calculations/income';
 import { Transaction, TransactionType } from '@/types/transaction';
+import { SpendingLevelConfig } from '@/types/settings';
 import { formatCurrency } from '@/lib/utils/currency';
 
 export default function CalendarHomePage() {
+  const router = useRouter();
   const {
     transactions,
     categories,
     bills,
     settings,
     availableBalance,
+    spentMoney,
     isLoading,
     addTransaction,
     updateTransaction,
     deleteTransaction,
     markBillAsPaid,
     updateStartingBalance,
+    updateSettings,
   } = useMooneyData();
 
   const { success, error } = useToast();
 
-  const now = new Date();
+  const now = useMemo(() => new Date(), []);
   const [year, setYear] = useState<number>(now.getFullYear());
   const [month, setMonth] = useState<number>(now.getMonth() + 1); // 1-12
   const [selectedDate, setSelectedDate] = useState<string>(toDateString(now));
@@ -45,8 +51,9 @@ export default function CalendarHomePage() {
   const [formType, setFormType] = useState<TransactionType>('expense');
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);
 
-  // Modal chỉnh sửa Số dư ban đầu
+  // Modal chỉnh sửa Số dư ban đầu & Spending Levels
   const [isBalanceModalOpen, setIsBalanceModalOpen] = useState<boolean>(false);
+  const [isSpendingConfigOpen, setIsSpendingConfigOpen] = useState<boolean>(false);
   const [startingBalanceInput, setStartingBalanceInput] = useState<string>('');
 
   // Lọc transactions của tháng đang xem để tính tổng thu & tổng chi
@@ -68,6 +75,15 @@ export default function CalendarHomePage() {
   const safeDailyResult = useMemo(() => {
     return calculateSafeDailySpending(availableBalance, selectedDate);
   }, [availableBalance, selectedDate]);
+
+  // Tính Spending Pace cho tháng đang chọn
+  const spendingPace = useMemo(() => {
+    const daysInCurMonth = getDaysInMonth(year, month);
+    const isCurrentActualMonth = year === now.getFullYear() && month === now.getMonth() + 1;
+    const curDay = isCurrentActualMonth ? now.getDate() : daysInCurMonth;
+    const totalBudget = Math.max(availableBalance + totalExpenseMonth, 0);
+    return calculateSpendingPace(totalExpenseMonth, daysInCurMonth, curDay, totalBudget);
+  }, [year, month, availableBalance, totalExpenseMonth, now]);
 
   // 1. Single tap ngày: Chọn ngày & Mở DailyDetailSheet
   const handleSelectDate = (dateStr: string) => {
@@ -157,6 +173,12 @@ export default function CalendarHomePage() {
     success(`Đã cập nhật số dư ban đầu: ${formatCurrency(raw)}`);
   };
 
+  const handleSaveSpendingLevels = async (levels: SpendingLevelConfig) => {
+    await updateSettings({ spendingLevels: levels });
+    setIsSpendingConfigOpen(false);
+    success('Đã lưu cấu hình mức chi tiêu!');
+  };
+
   if (isLoading) {
     return (
       <div className="flex flex-col gap-4 pt-2">
@@ -178,26 +200,26 @@ export default function CalendarHomePage() {
         }}
       />
 
-      {/* 2. Available Balance Card */}
-      <AvailableBalanceCard
+      {/* 2. Unified Financial Banner (Available Money ↔ Spent Money) */}
+      <AvailableMoneyBanner
         availableBalance={availableBalance}
-        totalIncome={totalIncomeMonth}
-        totalExpense={totalExpenseMonth}
-        daysRemaining={safeDailyResult.remainingDays}
-        onEditStartingBalance={handleOpenStartingBalanceModal}
+        spentMoney={spentMoney}
+        safeDailyResult={safeDailyResult}
+        spendingPace={spendingPace}
+        onOpenStartingBalance={handleOpenStartingBalanceModal}
+        onNavigateToIncome={() => router.push('/income')}
       />
 
-      {/* 3. Safe Daily Spending Card */}
-      <SafeSpendingCard safeDailyResult={safeDailyResult} />
-
-      {/* 4. Financial Calendar (T2 - CN, Heatmap, Single & Double tap) */}
+      {/* 3. Financial Calendar (T2 - CN, Heatmap, Single & Double tap, Spending Level Gear) */}
       <FinancialCalendar
         year={year}
         month={month}
         selectedDate={selectedDate}
         transactions={transactions}
+        spendingLevels={settings.spendingLevels}
         onSelectDate={handleSelectDate}
         onQuickAdd={handleQuickAdd}
+        onOpenSpendingConfig={() => setIsSpendingConfigOpen(true)}
       />
 
       {/* 5. Upcoming Bills Preview */}
@@ -272,6 +294,14 @@ export default function CalendarHomePage() {
           </div>
         </div>
       </Modal>
+
+      {/* 9. Spending Level Customization Modal */}
+      <SpendingLevelModal
+        isOpen={isSpendingConfigOpen}
+        onClose={() => setIsSpendingConfigOpen(false)}
+        currentConfig={settings.spendingLevels}
+        onSave={handleSaveSpendingLevels}
+      />
     </div>
   );
 }

@@ -1,36 +1,197 @@
 import { Transaction, TransactionType } from '@/types/transaction';
 import { Category } from '@/types/category';
+import { IncomeItem } from '@/types/income';
+import { calculateRealizedIncome } from './income';
 import {
   DailyTotals,
   CategoryTotal,
   SafeDailySpendingResult,
   MonthlyRecap,
+  SpendingPaceResult,
 } from '@/types/calculations';
 
 /**
- * Tính Số Tiền Khả Dụng (Available Balance).
+ * Tính Số Tiền Khả Dụng (Available Balance / Available Money).
  *
  * CÔNG THỨC CHUẨN:
- * Available Balance = Starting Balance + Total Income - Total Expense
+ * Available Money = Starting Balance + Realized Income - Total Expense
  *
  * LƯU Ý BẮT BUỘC:
- * - Starting Balance KHÔNG phải là một transaction.
- * - Income làm tăng số dư.
+ * - Starting Balance KHÔNG phải là một transaction hay income.
+ * - Income làm tăng số dư (chỉ tính realized income đã nhận).
  * - Expense làm giảm số dư.
+ * - Hỗ trợ cả Phase 1 legacy (transactions type='income') và Phase 2 (IncomeItem).
  */
 export function calculateAvailableBalance(
   startingBalance: number,
-  transactions: Transaction[]
+  transactions: Transaction[],
+  incomes?: IncomeItem[],
+  targetDateStr?: string
 ): number {
   let balance = startingBalance;
-  for (const tx of transactions) {
-    if (tx.type === 'income') {
-      balance += tx.amount;
-    } else if (tx.type === 'expense') {
-      balance -= tx.amount;
+
+  if (incomes !== undefined && incomes.length > 0) {
+    // Phase 2: Income từ domain model riêng (chỉ tính thu nhập đã thực nhận)
+    const today = targetDateStr || new Date().toISOString().split('T')[0];
+    balance += calculateRealizedIncome(incomes, today);
+
+    // Trừ các khoản chi tiêu
+    for (const tx of transactions) {
+      if (tx.type === 'expense') {
+        balance -= tx.amount;
+      }
+    }
+  } else {
+    // Phase 1 fallback (tương thích ngược)
+    for (const tx of transactions) {
+      if (tx.type === 'income') {
+        balance += tx.amount;
+      } else if (tx.type === 'expense') {
+        balance -= tx.amount;
+      }
     }
   }
+
   return balance;
+}
+
+/**
+ * Tính tổng số tiền đã chi tiêu (Spent Money) trong một chu kỳ (mặc định tháng).
+ */
+export function calculateSpentMoney(
+  transactions: Transaction[],
+  periodPrefix?: string
+): number {
+  let total = 0;
+  for (const tx of transactions) {
+    if (tx.type === 'expense') {
+      if (!periodPrefix || tx.date.startsWith(periodPrefix)) {
+        total += tx.amount;
+      }
+    }
+  }
+  return total;
+}
+
+/**
+ * Nhận xét tốc độ / nhịp độ chi tiêu (Spending Pace) chuẩn Rule-based (KHÔNG DÙNG AI).
+ */
+export function calculateSpendingPace(
+  totalExpense: number,
+  daysInMonth: number,
+  currentDay: number,
+  totalAvailableOrIncome?: number
+): SpendingPaceResult {
+  const safeCurrentDay = Math.max(1, Math.min(currentDay, daysInMonth));
+  const actualDaily = Math.round(totalExpense / safeCurrentDay);
+
+  if (totalExpense === 0) {
+    return {
+      status: 'slow',
+      message: 'Chưa có chi tiêu',
+      subMessage: 'Nhịp độ chi tiêu của bạn đang ở mức rất thong thả.',
+      expectedDailySpending: 0,
+      actualDailySpending: 0,
+      ratio: 0,
+    };
+  }
+
+  let expectedDaily = actualDaily;
+  let ratio = 1;
+
+  if (totalAvailableOrIncome && totalAvailableOrIncome > 0) {
+    expectedDaily = Math.round(totalAvailableOrIncome / daysInMonth);
+    const expectedSpendSoFar = expectedDaily * safeCurrentDay;
+    ratio = Math.round((totalExpense / Math.max(1, expectedSpendSoFar)) * 100) / 100;
+  }
+
+  if (ratio <= 0.8) {
+    return {
+      status: 'slow',
+      message: 'Chi tiêu thong thả',
+      subMessage: 'Tốc độ chi tiêu đang thấp hơn mức trung bình.',
+      expectedDailySpending: expectedDaily,
+      actualDailySpending: actualDaily,
+      ratio,
+    };
+  }
+
+  if (ratio <= 1.15) {
+    return {
+      status: 'normal',
+      message: 'Chi tiêu bình thường',
+      subMessage: 'Nhịp độ chi tiêu ổn định, đang trong tầm kiểm soát.',
+      expectedDailySpending: expectedDaily,
+      actualDailySpending: actualDaily,
+      ratio,
+    };
+  }
+
+  if (ratio <= 1.4) {
+    return {
+      status: 'fast',
+      message: 'Chi tiêu hơi nhanh',
+      subMessage: 'Tốc độ chi tiêu đang cao hơn tiến độ tháng.',
+      expectedDailySpending: expectedDaily,
+      actualDailySpending: actualDaily,
+      ratio,
+    };
+  }
+
+  return {
+    status: 'warning',
+    message: 'Chi tiêu quá nhanh',
+    subMessage: 'Tốc độ chi tiêu vượt quá mức an toàn, cần lưu ý.',
+    expectedDailySpending: expectedDaily,
+    actualDailySpending: actualDaily,
+    ratio,
+  };
+}
+
+/**
+ * Sắp xếp danh sách giao dịch theo số tiền chi tiêu giảm dần.
+ */
+export function sortTransactionsBySpending(
+  transactions: Transaction[]
+): Transaction[] {
+  return [...transactions].sort((a, b) => b.amount - a.amount);
+}
+
+/**
+ * Sắp xếp danh sách danh mục theo Tổng chi tiêu (spending) hoặc Tần suất (frequency).
+ */
+export function sortCategoryTotals(
+  categoryTotals: CategoryTotal[],
+  sortBy: 'spending' | 'frequency' = 'spending'
+): CategoryTotal[] {
+  return [...categoryTotals].sort((a, b) => {
+    if (sortBy === 'frequency') {
+      if (b.transactionCount !== a.transactionCount) {
+        return b.transactionCount - a.transactionCount;
+      }
+      return b.totalAmount - a.totalAmount;
+    }
+    // Mặc định spending
+    if (b.totalAmount !== a.totalAmount) {
+      return b.totalAmount - a.totalAmount;
+    }
+    return b.transactionCount - a.transactionCount;
+  });
+}
+
+/**
+ * Sắp xếp danh sách giao dịch trong một danh mục theo số tiền (amount) hoặc thời gian (date).
+ */
+export function sortCategoryTransactions(
+  transactions: Transaction[],
+  sortBy: 'amount' | 'date' = 'amount'
+): Transaction[] {
+  return [...transactions].sort((a, b) => {
+    if (sortBy === 'amount') {
+      return b.amount - a.amount;
+    }
+    return new Date(b.date).getTime() - new Date(a.date).getTime();
+  });
 }
 
 /**

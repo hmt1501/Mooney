@@ -7,13 +7,17 @@ import { CalendarCell } from './CalendarCell';
 import { CalendarLegend } from './CalendarLegend';
 import { calculateDailyTotals } from '@/lib/calculations/financial';
 
+import { SpendingLevelConfig } from '@/types/settings';
+
 interface FinancialCalendarProps {
   year: number;
   month: number; // 1-12
   selectedDate: string; // 'YYYY-MM-DD'
   transactions: Transaction[];
+  spendingLevels?: SpendingLevelConfig;
   onSelectDate: (dateStr: string) => void;
   onQuickAdd: (dateStr: string) => void;
+  onOpenSpendingConfig?: () => void;
 }
 
 export function FinancialCalendar({
@@ -21,8 +25,10 @@ export function FinancialCalendar({
   month,
   selectedDate,
   transactions,
+  spendingLevels,
   onSelectDate,
   onQuickAdd,
+  onOpenSpendingConfig,
 }: FinancialCalendarProps) {
   // Tạo ma trận các ngày T2 -> CN
   const matrixDays = useMemo(() => {
@@ -88,6 +94,7 @@ export function FinancialCalendar({
                 expenseAmount={totals.expense}
                 incomeAmount={totals.income}
                 isSelected={day.dateStr === selectedDate}
+                thresholds={spendingLevels}
                 onSelect={onSelectDate}
                 onQuickAdd={onQuickAdd}
               />
@@ -96,7 +103,10 @@ export function FinancialCalendar({
         </div>
 
         {/* Chú thích mức nhiệt chi tiêu */}
-        <CalendarLegend />
+        <CalendarLegend
+          spendingLevels={spendingLevels}
+          onOpenConfig={onOpenSpendingConfig}
+        />
       </div>
     </div>
   );

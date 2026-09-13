@@ -2,6 +2,7 @@ import {
   ITransactionRepository,
   ICategoryRepository,
   IRecurringBillRepository,
+  IIncomeRepository,
   ISettingsRepository,
   IDataManagementRepository,
   ExportDataStructure,
@@ -21,6 +22,11 @@ import {
   CreateBillInput,
   UpdateBillInput,
 } from '@/types/bill';
+import {
+  IncomeItem,
+  CreateIncomeInput,
+  UpdateIncomeInput,
+} from '@/types/income';
 import { UserSettings, UpdateSettingsInput } from '@/types/settings';
 import { DEFAULT_CATEGORIES } from '@/lib/constants/categories';
 import { DEFAULT_SETTINGS, generateSeedData } from '@/lib/constants/seedData';
@@ -32,6 +38,7 @@ const KEYS = {
   CATEGORIES: 'mooney_v1_categories',
   TRANSACTIONS: 'mooney_v1_transactions',
   BILLS: 'mooney_v1_bills',
+  INCOMES: 'mooney_v1_incomes',
 } as const;
 
 function isBrowser(): boolean {
@@ -343,7 +350,76 @@ export class LocalRecurringBillRepository implements IRecurringBillRepository {
 }
 
 // ----------------------------------------------------
-// 4. Settings Repository Implementation
+// 4. Income Repository Implementation (Phase 2)
+// ----------------------------------------------------
+export class LocalIncomeRepository implements IIncomeRepository {
+  async getAll(): Promise<IncomeItem[]> {
+    return getItem<IncomeItem[]>(KEYS.INCOMES, []);
+  }
+
+  async getById(id: string): Promise<IncomeItem | null> {
+    const list = await this.getAll();
+    return list.find((item) => item.id === id) || null;
+  }
+
+  async create(input: CreateIncomeInput): Promise<IncomeItem> {
+    const list = await this.getAll();
+    const now = new Date().toISOString();
+    const newIncome: IncomeItem = {
+      id: `inc-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      name: input.name,
+      amount: Math.abs(input.amount),
+      categoryId: input.categoryId,
+      date: input.date,
+      recurrence: input.recurrence,
+      receiveDay: input.receiveDay,
+      isActive: true,
+      note: input.note,
+      createdAt: now,
+      updatedAt: now,
+    };
+    list.push(newIncome);
+    setItem(KEYS.INCOMES, list);
+    return newIncome;
+  }
+
+  async update(id: string, input: UpdateIncomeInput): Promise<IncomeItem> {
+    const list = await this.getAll();
+    const index = list.findIndex((item) => item.id === id);
+    if (index === -1) {
+      throw new Error(`Không tìm thấy khoản thu nhập với id: ${id}`);
+    }
+
+    const current = list[index];
+    const updated: IncomeItem = {
+      ...current,
+      name: input.name ?? current.name,
+      amount: input.amount !== undefined ? Math.abs(input.amount) : current.amount,
+      categoryId: input.categoryId ?? current.categoryId,
+      date: input.date ?? current.date,
+      recurrence: input.recurrence ?? current.recurrence,
+      receiveDay: input.receiveDay ?? current.receiveDay,
+      isActive: input.isActive ?? current.isActive,
+      note: input.note !== undefined ? input.note : current.note,
+      updatedAt: new Date().toISOString(),
+    };
+
+    list[index] = updated;
+    setItem(KEYS.INCOMES, list);
+    return updated;
+  }
+
+  async delete(id: string): Promise<boolean> {
+    const list = await this.getAll();
+    const filtered = list.filter((item) => item.id !== id);
+    if (filtered.length === list.length) return false;
+    setItem(KEYS.INCOMES, filtered);
+    return true;
+  }
+}
+
+// ----------------------------------------------------
+// 5. Settings Repository Implementation
 // ----------------------------------------------------
 export class LocalSettingsRepository implements ISettingsRepository {
   async get(): Promise<UserSettings> {
@@ -361,6 +437,7 @@ export class LocalSettingsRepository implements ISettingsRepository {
       currency: input.currency ?? current.currency,
       theme: input.theme ?? current.theme,
       heatmapTheme: input.heatmapTheme ?? current.heatmapTheme,
+      spendingLevels: input.spendingLevels ?? current.spendingLevels,
       updatedAt: new Date().toISOString(),
     };
     setItem(KEYS.SETTINGS, updated);
@@ -373,7 +450,7 @@ export class LocalSettingsRepository implements ISettingsRepository {
 }
 
 // ----------------------------------------------------
-// 5. Data Management Repository (Seed, Reset, Export, Import)
+// 6. Data Management Repository (Seed, Reset, Export, Import)
 // ----------------------------------------------------
 export class LocalDataManagementRepository implements IDataManagementRepository {
   async isInitialized(): Promise<boolean> {
@@ -394,6 +471,7 @@ export class LocalDataManagementRepository implements IDataManagementRepository 
     setItem(KEYS.CATEGORIES, DEFAULT_CATEGORIES);
     setItem(KEYS.TRANSACTIONS, seed.transactions);
     setItem(KEYS.BILLS, seed.recurringBills);
+    setItem(KEYS.INCOMES, seed.incomes);
     window.localStorage.setItem(KEYS.INITIALIZED, 'true');
   }
 
@@ -404,6 +482,7 @@ export class LocalDataManagementRepository implements IDataManagementRepository 
     window.localStorage.removeItem(KEYS.CATEGORIES);
     window.localStorage.removeItem(KEYS.TRANSACTIONS);
     window.localStorage.removeItem(KEYS.BILLS);
+    window.localStorage.removeItem(KEYS.INCOMES);
 
     // Khởi tạo lại với dữ liệu mẫu nguyên bản
     await this.initializeWithSeedData(true);
@@ -414,6 +493,7 @@ export class LocalDataManagementRepository implements IDataManagementRepository 
     const categories = getItem<Category[]>(KEYS.CATEGORIES, DEFAULT_CATEGORIES);
     const transactions = getItem<Transaction[]>(KEYS.TRANSACTIONS, []);
     const recurringBills = getItem<RecurringBill[]>(KEYS.BILLS, []);
+    const incomes = getItem<IncomeItem[]>(KEYS.INCOMES, []);
 
     const exportData: ExportDataStructure = {
       version: '1.0.0',
@@ -422,6 +502,7 @@ export class LocalDataManagementRepository implements IDataManagementRepository 
       categories,
       transactions,
       recurringBills,
+      incomes,
     };
 
     return JSON.stringify(exportData, null, 2);
@@ -462,6 +543,9 @@ export class LocalDataManagementRepository implements IDataManagementRepository 
       if (Array.isArray(parsed.recurringBills)) {
         setItem(KEYS.BILLS, parsed.recurringBills);
       }
+      if (Array.isArray(parsed.incomes)) {
+        setItem(KEYS.INCOMES, parsed.incomes);
+      }
       window.localStorage.setItem(KEYS.INITIALIZED, 'true');
       return true;
     } catch (err) {
@@ -469,7 +553,6 @@ export class LocalDataManagementRepository implements IDataManagementRepository 
       throw err;
     }
   }
-
 }
 
 // ----------------------------------------------------
@@ -478,6 +561,7 @@ export class LocalDataManagementRepository implements IDataManagementRepository 
 const transactionRepo = new LocalTransactionRepository();
 const categoryRepo = new LocalCategoryRepository();
 const billRepo = new LocalRecurringBillRepository(transactionRepo);
+const incomeRepo = new LocalIncomeRepository();
 const settingsRepo = new LocalSettingsRepository();
 const dataManagementRepo = new LocalDataManagementRepository();
 
@@ -485,6 +569,7 @@ export const mooneyRepository = {
   transactions: transactionRepo,
   categories: categoryRepo,
   bills: billRepo,
+  incomes: incomeRepo,
   settings: settingsRepo,
   dataManagement: dataManagementRepo,
 };

@@ -4,6 +4,7 @@ import React, { useRef } from 'react';
 import { CalendarDayInfo } from '@/lib/utils/date';
 import { formatCompactCurrency } from '@/lib/utils/currency';
 import { getHeatLevel } from '@/lib/constants/heatmap';
+import { SpendingLevelConfig } from '@/types/settings';
 import { cn } from '@/lib/utils';
 
 interface CalendarCellProps {
@@ -11,6 +12,7 @@ interface CalendarCellProps {
   expenseAmount: number;
   incomeAmount: number;
   isSelected: boolean;
+  thresholds?: SpendingLevelConfig;
   onSelect: (dateStr: string) => void;
   onQuickAdd: (dateStr: string) => void;
 }
@@ -20,6 +22,7 @@ export function CalendarCell({
   expenseAmount,
   incomeAmount,
   isSelected,
+  thresholds,
   onSelect,
   onQuickAdd,
 }: CalendarCellProps) {
@@ -47,7 +50,7 @@ export function CalendarCell({
   // Cấp độ Heatmap theo ngưỡng tập trung (chỉ hiển thị cho ngày trong quá khứ/hiện tại có chi tiêu)
   const heatLevel =
     !isFuture && isCurrentMonth && expenseAmount > 0
-      ? getHeatLevel(expenseAmount)
+      ? getHeatLevel(expenseAmount, thresholds)
       : 'none';
 
   const hasIncome = !isFuture && isCurrentMonth && incomeAmount > 0;

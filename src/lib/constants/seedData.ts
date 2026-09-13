@@ -1,5 +1,6 @@
 import { Transaction } from '@/types/transaction';
 import { RecurringBill } from '@/types/bill';
+import { IncomeItem } from '@/types/income';
 import { UserSettings } from '@/types/settings';
 import { DEFAULT_CATEGORIES } from './categories';
 
@@ -8,6 +9,10 @@ export const DEFAULT_SETTINGS: UserSettings = {
   currency: 'VND',
   theme: 'light',
   heatmapTheme: 'classic',
+  spendingLevels: {
+    lowMax: 100_000,
+    mediumMax: 500_000,
+  },
   updatedAt: new Date().toISOString(),
 };
 
@@ -18,6 +23,7 @@ export function generateSeedData(): {
   settings: UserSettings;
   transactions: Transaction[];
   recurringBills: RecurringBill[];
+  incomes: IncomeItem[];
 } {
   const now = new Date();
   const year = now.getFullYear();
@@ -211,9 +217,38 @@ export function generateSeedData(): {
     },
   ];
 
+  const incomes: IncomeItem[] = [
+    {
+      id: 'inc-seed-1',
+      name: 'Lương Công Ty',
+      amount: 15_000_000,
+      categoryId: 'cat-inc-salary',
+      date: formatDay(1),
+      recurrence: 'monthly',
+      receiveDay: 25,
+      isActive: true,
+      note: 'Lương cố định hàng tháng vào ngày 25',
+      createdAt: `${formatDay(1)}T00:00:00.000Z`,
+      updatedAt: `${formatDay(1)}T00:00:00.000Z`,
+    },
+    {
+      id: 'inc-seed-2',
+      name: 'Dự Án Freelance Web',
+      amount: 5_000_000,
+      categoryId: 'cat-inc-freelance',
+      date: formatDay(10),
+      recurrence: 'never',
+      isActive: true,
+      note: 'Nghiệm thu thanh toán giai đoạn 1',
+      createdAt: `${formatDay(10)}T00:00:00.000Z`,
+      updatedAt: `${formatDay(10)}T00:00:00.000Z`,
+    },
+  ];
+
   return {
     settings: DEFAULT_SETTINGS,
     transactions,
     recurringBills,
+    incomes,
   };
 }
