@@ -9,6 +9,7 @@ export interface Category {
   isDefault?: boolean;
   isActive?: boolean;
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface CreateCategoryInput {

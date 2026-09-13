@@ -33,6 +33,11 @@ import { mooneyRepository } from '@/lib/repository/localRepository';
 import { calculateAvailableBalance, calculateSpentMoney } from '@/lib/calculations/financial';
 import { DEFAULT_SETTINGS } from '@/lib/constants/seedData';
 import { DEFAULT_CATEGORIES } from '@/lib/constants/categories';
+import { useAuth } from '@/lib/auth/authContext';
+import { getSupabaseClient } from '@/lib/supabase/client';
+import { performFullSync, getLastSyncedAt, SyncResult } from '@/lib/sync/syncEngine';
+
+export type SyncStatus = 'synced' | 'syncing' | 'offline' | 'unauthenticated';
 
 interface MooneyDataContextType {
   // State
@@ -44,6 +49,9 @@ interface MooneyDataContextType {
   availableBalance: number;
   spentMoney: number;
   isLoading: boolean;
+  isSyncing: boolean;
+  syncStatus: SyncStatus;
+  lastSyncedAt: string | null;
 
   // Transaction actions
   addTransaction: (input: CreateTransactionInput) => Promise<Transaction>;
@@ -86,6 +94,7 @@ interface MooneyDataContextType {
   exportData: () => Promise<string>;
   importData: (jsonString: string) => Promise<boolean>;
   refresh: () => Promise<void>;
+  triggerSync: () => Promise<void>;
 }
 
 const MooneyDataContext = createContext<MooneyDataContextType | undefined>(
@@ -97,12 +106,23 @@ export function MooneyDataProvider({
 }: {
   children: React.ReactNode;
 }) {
+  const { user, isConfigured } = useAuth();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [categories, setCategories] = useState<Category[]>(DEFAULT_CATEGORIES);
   const [bills, setBills] = useState<RecurringBill[]>([]);
   const [incomes, setIncomes] = useState<IncomeItem[]>([]);
   const [settings, setSettings] = useState<UserSettings>(DEFAULT_SETTINGS);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
+  const [lastSyncedAt, setLastSyncedAtState] = useState<string | null>(null);
+
+  // Sync status derivation
+  const syncStatus: SyncStatus = useMemo(() => {
+    if (!isConfigured) return 'offline';
+    if (!user) return 'unauthenticated';
+    if (isSyncing) return 'syncing';
+    return 'synced';
+  }, [isConfigured, user, isSyncing]);
 
   // Load toàn bộ dữ liệu từ Repository (Local-first)
   const refresh = useCallback(async () => {
@@ -124,12 +144,40 @@ export function MooneyDataProvider({
       setBills(billList);
       setIncomes(incomeList);
       setSettings(currentSettings);
+      setLastSyncedAtState(getLastSyncedAt());
     } catch (error) {
       console.error('[MooneyDataProvider] Lỗi tải dữ liệu:', error);
     } finally {
       setIsLoading(false);
     }
   }, []);
+
+  // Hàm trigger sync thủ công hoặc khi đăng nhập
+  const triggerSync = useCallback(async () => {
+    const supabase = getSupabaseClient();
+    if (!supabase || !user) return;
+
+    try {
+      setIsSyncing(true);
+      const result = await performFullSync(supabase, user.id);
+      if (result.success) {
+        setLastSyncedAtState(result.lastSyncedAt);
+        // Tải lại state mới nhất sau khi đồng bộ
+        await refresh();
+      }
+    } catch (err) {
+      console.error('[MooneyDataProvider] Lỗi triggerSync:', err);
+    } finally {
+      setIsSyncing(false);
+    }
+  }, [user, refresh]);
+
+  // Khi có user đăng nhập (hoặc phiên đăng nhập được khôi phục) -> tự động sync ngầm
+  useEffect(() => {
+    if (user && isConfigured) {
+      triggerSync();
+    }
+  }, [user, isConfigured, triggerSync]);
 
   useEffect(() => {
     refresh();
@@ -337,6 +385,10 @@ export function MooneyDataProvider({
         availableBalance,
         spentMoney,
         isLoading,
+        isSyncing,
+        syncStatus,
+        lastSyncedAt,
+        triggerSync,
         addTransaction,
         updateTransaction,
         deleteTransaction,

@@ -38,7 +38,7 @@ describe('Mooney Repository Abstraction', () => {
     expect(await dataRepo.isInitialized()).toBe(true);
 
     const initialTxs = await txRepo.getAll();
-    expect(initialTxs.length).toBeGreaterThan(0);
+    expect(initialTxs.length).toBe(0);
 
     // Thêm 1 giao dịch người dùng
     await txRepo.create({

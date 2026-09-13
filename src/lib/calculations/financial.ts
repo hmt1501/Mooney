@@ -29,26 +29,21 @@ export function calculateAvailableBalance(
   targetDateStr?: string
 ): number {
   let balance = startingBalance;
+  const today = targetDateStr || new Date().toISOString().split('T')[0];
 
+  // 1. Cộng thu nhập thực tế từ danh sách Incomes (Phase 2 domain model)
   if (incomes !== undefined && incomes.length > 0) {
-    // Phase 2: Income từ domain model riêng (chỉ tính thu nhập đã thực nhận)
-    const today = targetDateStr || new Date().toISOString().split('T')[0];
     balance += calculateRealizedIncome(incomes, today);
+  }
 
-    // Trừ các khoản chi tiêu
-    for (const tx of transactions) {
-      if (tx.type === 'expense') {
-        balance -= tx.amount;
-      }
-    }
-  } else {
-    // Phase 1 fallback (tương thích ngược)
-    for (const tx of transactions) {
-      if (tx.type === 'income') {
-        balance += tx.amount;
-      } else if (tx.type === 'expense') {
-        balance -= tx.amount;
-      }
+  // 2. Xử lý toàn bộ transactions:
+  // - Giao dịch 'income' trực tiếp -> tăng số dư
+  // - Giao dịch 'expense' -> giảm số dư
+  for (const tx of transactions) {
+    if (tx.type === 'income') {
+      balance += tx.amount;
+    } else if (tx.type === 'expense') {
+      balance -= tx.amount;
     }
   }
 

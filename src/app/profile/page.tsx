@@ -2,11 +2,14 @@
 
 import React, { useState, useRef } from 'react';
 import { useMooneyData } from '@/hooks/useMooneyData';
+import { useAuth } from '@/lib/auth/authContext';
 import { useTheme } from '@/components/theme/ThemeProvider';
 import { useToast } from '@/components/common/ToastContext';
 import { StartingBalanceModal } from '@/components/profile/StartingBalanceModal';
 import { HeatmapThemeSelector } from '@/components/profile/HeatmapThemeSelector';
 import { CategoryManagerSheet } from '@/components/profile/CategoryManagerSheet';
+import { AuthModal } from '@/components/auth/AuthModal';
+import { SyncStatusBadge } from '@/components/auth/SyncStatusBadge';
 import { Modal } from '@/components/common/Modal';
 import { Mascot } from '@/components/common/Mascot';
 import { formatCurrency } from '@/lib/utils/currency';
@@ -26,6 +29,9 @@ import {
   Heart,
   Sparkles,
   Coins,
+  Cloud,
+  LogOut,
+  User,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -41,8 +47,12 @@ export default function ProfilePage() {
     exportData,
     importData,
     resetToSeedData,
+    syncStatus,
+    lastSyncedAt,
+    triggerSync,
   } = useMooneyData();
 
+  const { user, signOut, isConfigured } = useAuth();
   const { theme, setTheme } = useTheme();
   const { success, error, info } = useToast();
 
@@ -51,6 +61,7 @@ export default function ProfilePage() {
   const [isCategoryManagerOpen, setIsCategoryManagerOpen] = useState(false);
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
   // Hidden file input cho Import JSON
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -183,6 +194,99 @@ export default function ProfilePage() {
             <Wallet className="w-3.5 h-3.5" />
             <span>Sửa số dư</span>
           </button>
+        </div>
+      </div>
+
+      {/* 2.5. Thẻ TÀI KHOẢN & ĐỒNG BỘ ĐÁM MÂY (Cloud Sync) */}
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center justify-between px-1">
+          <span className="text-xs font-black uppercase tracking-wider text-text-muted">
+            Tài Khoản & Đồng Bộ
+          </span>
+          <SyncStatusBadge
+            status={syncStatus}
+            lastSyncedAt={lastSyncedAt}
+            onTriggerSync={async () => {
+              await triggerSync();
+              success('Đã hoàn tất đồng bộ dữ liệu với máy chủ!');
+            }}
+          />
+        </div>
+
+        <div className="p-4 rounded-3xl bg-surface dark:bg-surface-elevated border border-border/80 shadow-soft flex flex-col gap-3">
+          {user ? (
+            // Đã đăng nhập
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-2xl bg-primary/10 text-primary flex items-center justify-center font-bold">
+                    <User className="w-5 h-5" />
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-sm font-extrabold text-text-primary">
+                      {user.user_metadata?.full_name || 'Người dùng Mooney'}
+                    </span>
+                    <span className="text-xs text-text-muted">{user.email}</span>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await signOut();
+                    success('Đã đăng xuất tài khoản.');
+                  }}
+                  className="p-2 rounded-xl text-text-muted hover:text-status-danger hover:bg-status-danger/10 active:scale-95 transition-all"
+                  title="Đăng xuất"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between pt-2.5 border-t border-border/60">
+                <span className="text-[11px] text-text-muted">
+                  {lastSyncedAt
+                    ? `Đồng bộ lúc: ${new Date(lastSyncedAt).toLocaleTimeString('vi-VN')} ${new Date(lastSyncedAt).toLocaleDateString('vi-VN')}`
+                    : 'Chưa có lịch sử đồng bộ'}
+                </span>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await triggerSync();
+                    success('Đã hoàn tất đồng bộ dữ liệu!');
+                  }}
+                  className="text-xs font-bold text-primary hover:underline"
+                >
+                  Đồng bộ ngay
+                </button>
+              </div>
+            </div>
+          ) : (
+            // Chưa đăng nhập (Khách / Local-only)
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-2xl bg-primary-soft text-primary flex items-center justify-center font-bold">
+                  <Cloud className="w-5 h-5" />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-sm font-extrabold text-text-primary">
+                    Đồng Bộ Đám Mây
+                  </span>
+                  <span className="text-xs text-text-muted">
+                    Sao lưu và truy cập dữ liệu trên mọi thiết bị
+                  </span>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsAuthModalOpen(true)}
+                className="px-3.5 py-2 rounded-xl bg-primary text-primary-content text-xs font-bold shadow-xs hover:bg-primary-hover active:scale-95 transition-all whitespace-nowrap"
+              >
+                Đăng Nhập
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -493,6 +597,15 @@ export default function ProfilePage() {
         cancelText="Hủy"
         isDestructive={true}
         onConfirm={handleConfirmReset}
+      />
+
+      {/* Auth Modal (Đăng nhập / Đăng ký) */}
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        onSuccess={async () => {
+          await triggerSync();
+        }}
       />
     </div>
   );

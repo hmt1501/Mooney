@@ -62,6 +62,60 @@ describe('Phase 2: Income Management & Financial Foundation Tests', () => {
       expect(spentMoney).toBe(2_000_000);
     });
 
+    it('cộng chính xác CẢ HAI nguồn thu: từ Incomes (định kỳ/một lần) VÀ giao dịch thu nhập trực tiếp (type=income)', () => {
+      const startingBalance = 0; // Mặc định 0 đ
+
+      // 1. Nguồn thu từ Incomes (ví dụ Lương nhận ngày 05/09)
+      const incomes: IncomeItem[] = [
+        {
+          id: 'inc-salary',
+          name: 'Lương',
+          amount: 10_000_000,
+          type: 'recurring',
+          recurrence: 'monthly',
+          receiveDay: 5,
+          isActive: true,
+          date: '2026-09-01',
+          createdAt: '2026-09-01T00:00:00Z',
+          updatedAt: '2026-09-01T00:00:00Z',
+        },
+      ];
+
+      // 2. Giao dịch nhập tay: 1 khoản thu 3m, 1 khoản chi 4m
+      const transactions: Transaction[] = [
+        {
+          id: 'tx-manual-inc',
+          type: 'income',
+          amount: 3_000_000,
+          categoryId: 'cat-bonus',
+          date: '2026-09-08',
+          createdAt: '2026-09-08T00:00:00Z',
+          updatedAt: '2026-09-08T00:00:00Z',
+        },
+        {
+          id: 'tx-manual-exp',
+          type: 'expense',
+          amount: 4_000_000,
+          categoryId: 'cat-food',
+          date: '2026-09-09',
+          createdAt: '2026-09-09T00:00:00Z',
+          updatedAt: '2026-09-09T00:00:00Z',
+        },
+      ];
+
+      // Available = 0 + 10m (incomes) + 3m (tx income) - 4m (tx expense) = 9m
+      const available = calculateAvailableBalance(
+        startingBalance,
+        transactions,
+        incomes,
+        '2026-09-10'
+      );
+      const spent = calculateSpentMoney(transactions, '2026-09');
+
+      expect(available).toBe(9_000_000);
+      expect(spent).toBe(4_000_000);
+    });
+
     it('Starting Balance KHÔNG phải là Transaction hay Income (không bị cộng dồn trong Income Summary)', () => {
       const startingBalance = 5_000_000;
       const incomes: IncomeItem[] = [

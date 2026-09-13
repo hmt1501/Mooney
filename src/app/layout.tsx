@@ -7,6 +7,7 @@ import { TopHeader } from '@/components/layout/TopHeader';
 import { BottomNavigation } from '@/components/layout/BottomNavigation';
 import { FloatingActions } from '@/components/layout/FloatingActions';
 import { MooneyDataProvider } from '@/hooks/useMooneyData';
+import { AuthProvider } from '@/lib/auth/authContext';
 
 export const metadata: Metadata = {
   title: 'Mooney — Sổ Quản Lý Chi Tiêu',
@@ -51,16 +52,18 @@ export default function RootLayout({
       <body className="min-h-screen font-sans bg-background-subtle text-text-primary antialiased selection:bg-primary-soft selection:text-primary">
         <ThemeProvider>
           <ToastProvider>
-            <MooneyDataProvider>
-              <AppShell>
-                <TopHeader />
-                <div className="flex-1 pb-24 px-4 overflow-y-auto">
-                  {children}
-                </div>
-                <FloatingActions />
-                <BottomNavigation />
-              </AppShell>
-            </MooneyDataProvider>
+            <AuthProvider>
+              <MooneyDataProvider>
+                <AppShell>
+                  <TopHeader />
+                  <div className="flex-1 pb-24 px-4 overflow-y-auto">
+                    {children}
+                  </div>
+                  <FloatingActions />
+                  <BottomNavigation />
+                </AppShell>
+              </MooneyDataProvider>
+            </AuthProvider>
           </ToastProvider>
         </ThemeProvider>
       </body>

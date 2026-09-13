@@ -105,7 +105,7 @@ export function AvailableMoneyBanner({
       <div className="relative z-10 flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
           <span className="text-[10px] font-black uppercase tracking-widest text-primary-content/80 block mb-1">
-            {isAvailableView ? 'Số Tiền Khả Dụng Hiện Có' : 'Tổng Chi Tiêu Tháng Này'}
+            {isAvailableView ? 'Số Tiền Khả Dụng' : 'Tổng Chi Tiêu Tháng Này'}
           </span>
 
           <div
@@ -149,34 +149,26 @@ export function AvailableMoneyBanner({
         </div>
       </div>
 
-      {/* 3. Phần Hợp Nhất: Hạn Mức An Toàn Hôm Nay & Nhận Xét Tốc Độ Chi Tiêu */}
-      <div className="relative z-10 pt-3 border-t border-white/15 grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
-        {/* Safe Daily Spending */}
-        <div className="flex flex-col bg-white/10 rounded-2xl p-2.5">
-          <div className="flex items-center justify-between text-[10px] font-bold text-primary-content/80 mb-0.5">
-            <span className="uppercase tracking-wider">Chi tiêu an toàn hôm nay</span>
-            <span>Còn {safeDailyResult.remainingDays} ngày</span>
-          </div>
-          <span className="text-base font-black text-white tabular-nums">
-            {safeDailyResult.isNegative ? '0 đ' : formatCurrency(safeDailyResult.amountPerDay)}{' '}
-            <span className="text-[10px] font-normal text-primary-content/80">/ ngày</span>
+      {/* 3. Phần Hợp Nhất: Chi Tiêu An Toàn & Tốc Độ Chi Tiêu (Mỗi mục 1 dòng tối giản) */}
+      <div className="relative z-10 pt-2.5 border-t border-white/15 flex flex-col gap-1.5 text-xs">
+        {/* Chi tiêu an toàn: 1 dòng */}
+        <div className="flex items-center justify-between bg-white/10 rounded-xl px-3 py-1.5 text-white">
+          <span className="text-[11px] font-bold text-primary-content/90">Chi tiêu an toàn</span>
+          <span className="text-xs font-black tabular-nums">
+            {safeDailyResult.isNegative ? '0 đ' : formatCurrency(safeDailyResult.amountPerDay)}
+            <span className="text-[10px] font-normal text-primary-content/80 ml-1">/ngày</span>
           </span>
         </div>
 
-        {/* Spending Pace Assessment */}
-        <div className="flex flex-col bg-white/10 rounded-2xl p-2.5 justify-center">
-          <div className="flex items-center gap-1.5 text-[10px] font-bold text-primary-content/80 mb-0.5">
+        {/* Tốc độ chi tiêu: 1 dòng */}
+        <div className="flex items-center justify-between bg-white/10 rounded-xl px-3 py-1.5 text-white">
+          <div className="flex items-center gap-1.5">
             <span className={cn('w-2 h-2 rounded-full shrink-0', paceDotColor)} />
-            <span className="uppercase tracking-wider">Tốc độ chi tiêu</span>
+            <span className="text-[11px] font-bold text-primary-content/90">Tốc độ chi tiêu</span>
           </div>
-          <span className="text-xs font-bold text-white truncate">
+          <span className="text-xs font-extrabold text-white">
             {spendingPace.message}
           </span>
-          {spendingPace.subMessage && (
-            <span className="text-[10px] text-primary-content/80 truncate leading-tight">
-              {spendingPace.subMessage}
-            </span>
-          )}
         </div>
       </div>
     </div>

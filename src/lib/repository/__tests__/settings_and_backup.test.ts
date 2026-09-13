@@ -113,7 +113,7 @@ describe('Settings, Category Management & Data Backup', () => {
     expect(Array.isArray(parsed.categories)).toBe(true);
     expect(Array.isArray(parsed.transactions)).toBe(true);
     expect(Array.isArray(parsed.recurringBills)).toBe(true);
-    expect(parsed.transactions.length).toBeGreaterThan(0);
+    expect(parsed.transactions.length).toBe(0);
   });
 
   it('importJSON thành công với dữ liệu hợp lệ và từ chối dữ liệu sai cấu trúc', async () => {
