@@ -7,6 +7,7 @@ import React, {
   useEffect,
   useCallback,
   useMemo,
+  useRef,
 } from 'react';
 import {
   Transaction,
@@ -29,15 +30,26 @@ import {
   UpdateIncomeInput,
 } from '@/types/income';
 import { UserSettings, UpdateSettingsInput } from '@/types/settings';
-import { mooneyRepository } from '@/lib/repository/localRepository';
+import { mooneyRepository, setActiveStorageScope } from '@/lib/repository/localRepository';
 import { calculateAvailableBalance, calculateSpentMoney } from '@/lib/calculations/financial';
 import { DEFAULT_SETTINGS } from '@/lib/constants/seedData';
 import { DEFAULT_CATEGORIES } from '@/lib/constants/categories';
 import { useAuth } from '@/lib/auth/authContext';
 import { getSupabaseClient } from '@/lib/supabase/client';
-import { performFullSync, getLastSyncedAt, SyncResult } from '@/lib/sync/syncEngine';
+import {
+  performFullSync,
+  getLastSyncedAt,
+  hasPendingChanges,
+  resetSyncBase,
+  SyncResult,
+} from '@/lib/sync/syncEngine';
 
-export type SyncStatus = 'synced' | 'syncing' | 'offline' | 'unauthenticated';
+/**
+ * - synced: lần đồng bộ gần nhất thành công và không còn thay đổi cục bộ chưa đẩy
+ * - pending: có thay đổi cục bộ chưa được đồng bộ (hoặc chưa từng đồng bộ thành công)
+ * - error: lần đồng bộ gần nhất thất bại
+ */
+export type SyncStatus = 'synced' | 'syncing' | 'pending' | 'error' | 'offline' | 'unauthenticated';
 
 interface MooneyDataContextType {
   // State
@@ -51,6 +63,7 @@ interface MooneyDataContextType {
   isLoading: boolean;
   isSyncing: boolean;
   syncStatus: SyncStatus;
+  syncError: string | null;
   lastSyncedAt: string | null;
 
   // Transaction actions
@@ -94,7 +107,7 @@ interface MooneyDataContextType {
   exportData: () => Promise<string>;
   importData: (jsonString: string) => Promise<boolean>;
   refresh: () => Promise<void>;
-  triggerSync: () => Promise<void>;
+  triggerSync: () => Promise<SyncResult>;
 }
 
 const MooneyDataContext = createContext<MooneyDataContextType | undefined>(
@@ -106,7 +119,10 @@ export function MooneyDataProvider({
 }: {
   children: React.ReactNode;
 }) {
-  const { user, isConfigured } = useAuth();
+  const { user, isConfigured, isLoading: isAuthLoading } = useAuth();
+  const userId = user?.id ?? null;
+  // Tài khoản mà UI đang hiển thị; dùng để bỏ qua kết quả đồng bộ của tài khoản đã đăng xuất
+  const activeUserIdRef = useRef<string | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [categories, setCategories] = useState<Category[]>(DEFAULT_CATEGORIES);
   const [bills, setBills] = useState<RecurringBill[]>([]);
@@ -115,14 +131,18 @@ export function MooneyDataProvider({
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [lastSyncedAt, setLastSyncedAtState] = useState<string | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const [pendingChanges, setPendingChanges] = useState<boolean>(false);
 
-  // Sync status derivation
+  // Sync status derivation: chỉ báo "đã đồng bộ" khi lần đồng bộ thực sự thành công
   const syncStatus: SyncStatus = useMemo(() => {
     if (!isConfigured) return 'offline';
     if (!user) return 'unauthenticated';
     if (isSyncing) return 'syncing';
+    if (syncError) return 'error';
+    if (pendingChanges || !lastSyncedAt) return 'pending';
     return 'synced';
-  }, [isConfigured, user, isSyncing]);
+  }, [isConfigured, user, isSyncing, syncError, pendingChanges, lastSyncedAt]);
 
   // Load toàn bộ dữ liệu từ Repository (Local-first)
   const refresh = useCallback(async () => {
@@ -144,7 +164,7 @@ export function MooneyDataProvider({
       setBills(billList);
       setIncomes(incomeList);
       setSettings(currentSettings);
-      setLastSyncedAtState(getLastSyncedAt());
+      setLastSyncedAtState(getLastSyncedAt(activeUserIdRef.current));
     } catch (error) {
       console.error('[MooneyDataProvider] Lỗi tải dữ liệu:', error);
     } finally {
@@ -153,35 +173,75 @@ export function MooneyDataProvider({
   }, []);
 
   // Hàm trigger sync thủ công hoặc khi đăng nhập
-  const triggerSync = useCallback(async () => {
+  const triggerSync = useCallback(async (): Promise<SyncResult> => {
     const supabase = getSupabaseClient();
-    if (!supabase || !user) return;
+    if (!supabase || !userId) {
+      return {
+        success: false,
+        error: !supabase ? 'Supabase chưa được cấu hình.' : 'Bạn cần đăng nhập để đồng bộ.',
+        migratedCount: 0,
+        syncedCount: 0,
+        uploadedCount: 0,
+        downloadedCount: 0,
+        deletedRemoteCount: 0,
+        deletedLocalCount: 0,
+        lastSyncedAt: getLastSyncedAt(userId),
+      };
+    }
 
+    setIsSyncing(true);
+    setSyncError(null);
     try {
-      setIsSyncing(true);
-      const result = await performFullSync(supabase, user.id);
+      const result = await performFullSync(supabase, userId);
+      // Người dùng đã đăng xuất / đổi tài khoản trong lúc đồng bộ -> không cập nhật UI hiện tại
+      if (activeUserIdRef.current !== userId) return result;
+
       if (result.success) {
-        setLastSyncedAtState(result.lastSyncedAt);
-        // Tải lại state mới nhất sau khi đồng bộ
+        // Tải lại state mới nhất từ cache cục bộ vừa được hợp nhất
         await refresh();
+      } else {
+        setSyncError(result.error || 'Đồng bộ thất bại.');
       }
-    } catch (err) {
-      console.error('[MooneyDataProvider] Lỗi triggerSync:', err);
+      return result;
     } finally {
-      setIsSyncing(false);
+      if (activeUserIdRef.current === userId) {
+        setIsSyncing(false);
+      }
     }
-  }, [user, refresh]);
+  }, [userId, refresh]);
 
-  // Khi có user đăng nhập (hoặc phiên đăng nhập được khôi phục) -> tự động sync ngầm
+  // Khi trạng thái đăng nhập đã rõ: chuyển sang vùng dữ liệu của đúng tài khoản (hoặc khách),
+  // tải dữ liệu cục bộ của vùng đó, rồi đồng bộ ngầm nếu đã đăng nhập.
   useEffect(() => {
-    if (user && isConfigured) {
-      triggerSync();
-    }
-  }, [user, isConfigured, triggerSync]);
+    if (isAuthLoading) return;
 
+    activeUserIdRef.current = userId;
+    setActiveStorageScope(userId);
+    setIsLoading(true);
+    setIsSyncing(false);
+    setSyncError(null);
+    setPendingChanges(false);
+
+    refresh().then(() => {
+      if (userId && isConfigured && activeUserIdRef.current === userId) {
+        triggerSync();
+      }
+    });
+    // triggerSync/refresh chỉ phụ thuộc userId, không cần chạy lại khi chúng đổi tham chiếu
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthLoading, userId, isConfigured]);
+
+  // Theo dõi thay đổi cục bộ chưa đồng bộ
   useEffect(() => {
-    refresh();
-  }, [refresh]);
+    if (!userId || isLoading) return;
+    let cancelled = false;
+    hasPendingChanges(userId).then((pending) => {
+      if (!cancelled) setPendingChanges(pending);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, isLoading, transactions, categories, bills, incomes, settings, lastSyncedAt]);
 
   // Đồng bộ chủ đề Heatmap vào thẻ html
   useEffect(() => {
@@ -311,8 +371,10 @@ export function MooneyDataProvider({
 
   const resetToSeedData = useCallback(async () => {
     await mooneyRepository.dataManagement.resetAllData();
+    // Không coi dữ liệu cục bộ vừa bị xóa là "đã xóa trên cloud"
+    if (userId) resetSyncBase(userId);
     await refresh();
-  }, [refresh]);
+  }, [refresh, userId]);
 
   const exportData = useCallback(async () => {
     return mooneyRepository.dataManagement.exportJSON();
@@ -324,11 +386,13 @@ export function MooneyDataProvider({
         jsonString
       );
       if (success) {
+        // Dữ liệu nhập được gộp với cloud ở lần đồng bộ sau, không xóa dữ liệu cloud
+        if (userId) resetSyncBase(userId);
         await refresh();
       }
       return success;
     },
-    [refresh]
+    [refresh, userId]
   );
 
   // Income Actions (Phase 2)
@@ -387,6 +451,7 @@ export function MooneyDataProvider({
         isLoading,
         isSyncing,
         syncStatus,
+        syncError,
         lastSyncedAt,
         triggerSync,
         addTransaction,

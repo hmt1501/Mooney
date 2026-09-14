@@ -32,14 +32,36 @@ import { DEFAULT_CATEGORIES } from '@/lib/constants/categories';
 import { DEFAULT_SETTINGS, generateSeedData } from '@/lib/constants/seedData';
 
 // Khóa lưu trữ LocalStorage phân tầng
-const KEYS = {
-  INITIALIZED: 'mooney_v1_initialized',
-  SETTINGS: 'mooney_v1_settings',
-  CATEGORIES: 'mooney_v1_categories',
-  TRANSACTIONS: 'mooney_v1_transactions',
-  BILLS: 'mooney_v1_bills',
-  INCOMES: 'mooney_v1_incomes',
+const KEY_NAMES = {
+  INITIALIZED: 'initialized',
+  SETTINGS: 'settings',
+  CATEGORIES: 'categories',
+  TRANSACTIONS: 'transactions',
+  BILLS: 'bills',
+  INCOMES: 'incomes',
 } as const;
+
+type KeyName = keyof typeof KEY_NAMES;
+
+/**
+ * Phạm vi lưu trữ cục bộ: null = khách (chưa đăng nhập), string = userId.
+ * Mỗi tài khoản có vùng dữ liệu riêng trên thiết bị để dữ liệu của người này
+ * không bao giờ bị hiển thị hay đẩy lên tài khoản của người khác.
+ */
+export type StorageScope = string | null;
+
+export const GUEST_SCOPE: StorageScope = null;
+
+/**
+ * Khách giữ nguyên khóa cũ 'mooney_v1_*' để tương thích dữ liệu Phase 1.
+ */
+export function getScopedKey(scope: StorageScope, name: KeyName): string {
+  const prefix = scope ? `mooney_v1_user_${scope}_` : 'mooney_v1_';
+  return `${prefix}${KEY_NAMES[name]}`;
+}
+
+/** Mốc "chưa từng chỉnh sửa" cho settings mặc định của tài khoản, để dữ liệu cloud luôn thắng khi tải lần đầu. */
+export const NEVER_EDITED_AT = new Date(0).toISOString();
 
 function isBrowser(): boolean {
   return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
@@ -69,8 +91,19 @@ function setItem<T>(key: string, value: T): void {
 // 1. Transaction Repository Implementation
 // ----------------------------------------------------
 export class LocalTransactionRepository implements ITransactionRepository {
+  constructor(private scope: StorageScope = GUEST_SCOPE) {}
+
+  private get key(): string {
+    return getScopedKey(this.scope, 'TRANSACTIONS');
+  }
+
   async getAll(): Promise<Transaction[]> {
-    return getItem<Transaction[]>(KEYS.TRANSACTIONS, []);
+    return getItem<Transaction[]>(this.key, []);
+  }
+
+  /** Ghi đè toàn bộ cache cục bộ (dùng bởi Sync Engine, giữ nguyên id/timestamp). */
+  async replaceAll(items: Transaction[]): Promise<void> {
+    setItem(this.key, items);
   }
 
   async getById(id: string): Promise<Transaction | null> {
@@ -103,7 +136,7 @@ export class LocalTransactionRepository implements ITransactionRepository {
       updatedAt: now,
     };
     list.push(newTx);
-    setItem(KEYS.TRANSACTIONS, list);
+    setItem(this.key, list);
     return newTx;
   }
 
@@ -126,7 +159,7 @@ export class LocalTransactionRepository implements ITransactionRepository {
       updatedAt: new Date().toISOString(),
     };
     list[index] = updated;
-    setItem(KEYS.TRANSACTIONS, list);
+    setItem(this.key, list);
     return updated;
   }
 
@@ -135,7 +168,7 @@ export class LocalTransactionRepository implements ITransactionRepository {
     const list = await this.getAll();
     const filtered = list.filter((item) => item.id !== id);
     if (filtered.length === list.length) return false;
-    setItem(KEYS.TRANSACTIONS, filtered);
+    setItem(this.key, filtered);
     return true;
   }
 }
@@ -144,8 +177,19 @@ export class LocalTransactionRepository implements ITransactionRepository {
 // 2. Category Repository Implementation
 // ----------------------------------------------------
 export class LocalCategoryRepository implements ICategoryRepository {
+  constructor(private scope: StorageScope = GUEST_SCOPE) {}
+
+  private get key(): string {
+    return getScopedKey(this.scope, 'CATEGORIES');
+  }
+
   async getAll(): Promise<Category[]> {
-    return getItem<Category[]>(KEYS.CATEGORIES, DEFAULT_CATEGORIES);
+    return getItem<Category[]>(this.key, DEFAULT_CATEGORIES);
+  }
+
+  /** Ghi đè toàn bộ cache cục bộ (dùng bởi Sync Engine, giữ nguyên id/timestamp). */
+  async replaceAll(items: Category[]): Promise<void> {
+    setItem(this.key, items);
   }
 
   async getById(id: string): Promise<Category | null> {
@@ -155,6 +199,7 @@ export class LocalCategoryRepository implements ICategoryRepository {
 
   async create(input: CreateCategoryInput): Promise<Category> {
     const list = await this.getAll();
+    const now = new Date().toISOString();
     const newCat: Category = {
       id: `cat-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       name: input.name,
@@ -163,10 +208,11 @@ export class LocalCategoryRepository implements ICategoryRepository {
       color: input.color,
       isDefault: false,
       isActive: true,
-      createdAt: new Date().toISOString(),
+      createdAt: now,
+      updatedAt: now,
     };
     list.push(newCat);
-    setItem(KEYS.CATEGORIES, list);
+    setItem(this.key, list);
     return newCat;
   }
 
@@ -184,10 +230,11 @@ export class LocalCategoryRepository implements ICategoryRepository {
       icon: input.icon ?? current.icon,
       color: input.color ?? current.color,
       isActive: input.isActive ?? current.isActive,
+      updatedAt: new Date().toISOString(),
     };
 
     list[index] = updated;
-    setItem(KEYS.CATEGORIES, list);
+    setItem(this.key, list);
     return updated;
   }
 
@@ -195,7 +242,7 @@ export class LocalCategoryRepository implements ICategoryRepository {
     const list = await this.getAll();
     const filtered = list.filter((item) => item.id !== id);
     if (filtered.length === list.length) return false;
-    setItem(KEYS.CATEGORIES, filtered);
+    setItem(this.key, filtered);
     return true;
   }
 }
@@ -206,12 +253,21 @@ export class LocalCategoryRepository implements ICategoryRepository {
 export class LocalRecurringBillRepository implements IRecurringBillRepository {
   private transactionRepo: ITransactionRepository;
 
-  constructor(transactionRepo: ITransactionRepository) {
+  constructor(transactionRepo: ITransactionRepository, private scope: StorageScope = GUEST_SCOPE) {
     this.transactionRepo = transactionRepo;
   }
 
+  private get key(): string {
+    return getScopedKey(this.scope, 'BILLS');
+  }
+
   async getAll(): Promise<RecurringBill[]> {
-    return getItem<RecurringBill[]>(KEYS.BILLS, []);
+    return getItem<RecurringBill[]>(this.key, []);
+  }
+
+  /** Ghi đè toàn bộ cache cục bộ (dùng bởi Sync Engine, giữ nguyên id/timestamp). */
+  async replaceAll(items: RecurringBill[]): Promise<void> {
+    setItem(this.key, items);
   }
 
   async getById(id: string): Promise<RecurringBill | null> {
@@ -235,7 +291,7 @@ export class LocalRecurringBillRepository implements IRecurringBillRepository {
       updatedAt: now,
     };
     list.push(newBill);
-    setItem(KEYS.BILLS, list);
+    setItem(this.key, list);
     return newBill;
   }
 
@@ -264,7 +320,7 @@ export class LocalRecurringBillRepository implements IRecurringBillRepository {
 
 
     list[index] = updated;
-    setItem(KEYS.BILLS, list);
+    setItem(this.key, list);
     return updated;
   }
 
@@ -272,7 +328,7 @@ export class LocalRecurringBillRepository implements IRecurringBillRepository {
     const list = await this.getAll();
     const filtered = list.filter((item) => item.id !== id);
     if (filtered.length === list.length) return false;
-    setItem(KEYS.BILLS, filtered);
+    setItem(this.key, filtered);
     return true;
   }
 
@@ -353,8 +409,19 @@ export class LocalRecurringBillRepository implements IRecurringBillRepository {
 // 4. Income Repository Implementation (Phase 2)
 // ----------------------------------------------------
 export class LocalIncomeRepository implements IIncomeRepository {
+  constructor(private scope: StorageScope = GUEST_SCOPE) {}
+
+  private get key(): string {
+    return getScopedKey(this.scope, 'INCOMES');
+  }
+
   async getAll(): Promise<IncomeItem[]> {
-    return getItem<IncomeItem[]>(KEYS.INCOMES, []);
+    return getItem<IncomeItem[]>(this.key, []);
+  }
+
+  /** Ghi đè toàn bộ cache cục bộ (dùng bởi Sync Engine, giữ nguyên id/timestamp). */
+  async replaceAll(items: IncomeItem[]): Promise<void> {
+    setItem(this.key, items);
   }
 
   async getById(id: string): Promise<IncomeItem | null> {
@@ -379,7 +446,7 @@ export class LocalIncomeRepository implements IIncomeRepository {
       updatedAt: now,
     };
     list.push(newIncome);
-    setItem(KEYS.INCOMES, list);
+    setItem(this.key, list);
     return newIncome;
   }
 
@@ -405,7 +472,7 @@ export class LocalIncomeRepository implements IIncomeRepository {
     };
 
     list[index] = updated;
-    setItem(KEYS.INCOMES, list);
+    setItem(this.key, list);
     return updated;
   }
 
@@ -413,7 +480,7 @@ export class LocalIncomeRepository implements IIncomeRepository {
     const list = await this.getAll();
     const filtered = list.filter((item) => item.id !== id);
     if (filtered.length === list.length) return false;
-    setItem(KEYS.INCOMES, filtered);
+    setItem(this.key, filtered);
     return true;
   }
 }
@@ -422,8 +489,19 @@ export class LocalIncomeRepository implements IIncomeRepository {
 // 5. Settings Repository Implementation
 // ----------------------------------------------------
 export class LocalSettingsRepository implements ISettingsRepository {
+  constructor(private scope: StorageScope = GUEST_SCOPE) {}
+
+  private get key(): string {
+    return getScopedKey(this.scope, 'SETTINGS');
+  }
+
   async get(): Promise<UserSettings> {
-    return getItem<UserSettings>(KEYS.SETTINGS, DEFAULT_SETTINGS);
+    return getItem<UserSettings>(this.key, DEFAULT_SETTINGS);
+  }
+
+  /** Ghi đè settings cục bộ (dùng bởi Sync Engine, giữ nguyên timestamp). */
+  async replace(settings: UserSettings): Promise<void> {
+    setItem(this.key, settings);
   }
 
   async update(input: UpdateSettingsInput): Promise<UserSettings> {
@@ -440,7 +518,7 @@ export class LocalSettingsRepository implements ISettingsRepository {
       spendingLevels: input.spendingLevels ?? current.spendingLevels,
       updatedAt: new Date().toISOString(),
     };
-    setItem(KEYS.SETTINGS, updated);
+    setItem(this.key, updated);
     return updated;
   }
 
@@ -453,9 +531,25 @@ export class LocalSettingsRepository implements ISettingsRepository {
 // 6. Data Management Repository (Seed, Reset, Export, Import)
 // ----------------------------------------------------
 export class LocalDataManagementRepository implements IDataManagementRepository {
+  constructor(private scope: StorageScope = GUEST_SCOPE) {}
+
+  private key(name: KeyName): string {
+    return getScopedKey(this.scope, name);
+  }
+
   async isInitialized(): Promise<boolean> {
     if (!isBrowser()) return false;
-    return window.localStorage.getItem(KEYS.INITIALIZED) === 'true';
+    return window.localStorage.getItem(this.key('INITIALIZED')) === 'true';
+  }
+
+  /**
+   * Khách: dữ liệu khởi tạo như Phase 1.
+   * Tài khoản: settings đánh dấu "chưa từng chỉnh sửa" để dữ liệu cloud được ưu tiên khi tải về.
+   */
+  private buildInitialData() {
+    const seed = generateSeedData();
+    if (!this.scope) return seed;
+    return { ...seed, settings: { ...seed.settings, updatedAt: NEVER_EDITED_AT } };
   }
 
   async initializeWithSeedData(force = false): Promise<void> {
@@ -466,34 +560,34 @@ export class LocalDataManagementRepository implements IDataManagementRepository 
       return;
     }
 
-    const seed = generateSeedData();
-    setItem(KEYS.SETTINGS, seed.settings);
-    setItem(KEYS.CATEGORIES, DEFAULT_CATEGORIES);
-    setItem(KEYS.TRANSACTIONS, seed.transactions);
-    setItem(KEYS.BILLS, seed.recurringBills);
-    setItem(KEYS.INCOMES, seed.incomes);
-    window.localStorage.setItem(KEYS.INITIALIZED, 'true');
+    const seed = this.buildInitialData();
+    setItem(this.key('SETTINGS'), seed.settings);
+    setItem(this.key('CATEGORIES'), DEFAULT_CATEGORIES);
+    setItem(this.key('TRANSACTIONS'), seed.transactions);
+    setItem(this.key('BILLS'), seed.recurringBills);
+    setItem(this.key('INCOMES'), seed.incomes);
+    window.localStorage.setItem(this.key('INITIALIZED'), 'true');
   }
 
   async resetAllData(): Promise<void> {
     if (!isBrowser()) return;
-    window.localStorage.removeItem(KEYS.INITIALIZED);
-    window.localStorage.removeItem(KEYS.SETTINGS);
-    window.localStorage.removeItem(KEYS.CATEGORIES);
-    window.localStorage.removeItem(KEYS.TRANSACTIONS);
-    window.localStorage.removeItem(KEYS.BILLS);
-    window.localStorage.removeItem(KEYS.INCOMES);
+    window.localStorage.removeItem(this.key('INITIALIZED'));
+    window.localStorage.removeItem(this.key('SETTINGS'));
+    window.localStorage.removeItem(this.key('CATEGORIES'));
+    window.localStorage.removeItem(this.key('TRANSACTIONS'));
+    window.localStorage.removeItem(this.key('BILLS'));
+    window.localStorage.removeItem(this.key('INCOMES'));
 
     // Khởi tạo lại với dữ liệu mẫu nguyên bản
     await this.initializeWithSeedData(true);
   }
 
   async exportJSON(): Promise<string> {
-    const settings = getItem<UserSettings>(KEYS.SETTINGS, DEFAULT_SETTINGS);
-    const categories = getItem<Category[]>(KEYS.CATEGORIES, DEFAULT_CATEGORIES);
-    const transactions = getItem<Transaction[]>(KEYS.TRANSACTIONS, []);
-    const recurringBills = getItem<RecurringBill[]>(KEYS.BILLS, []);
-    const incomes = getItem<IncomeItem[]>(KEYS.INCOMES, []);
+    const settings = getItem<UserSettings>(this.key('SETTINGS'), DEFAULT_SETTINGS);
+    const categories = getItem<Category[]>(this.key('CATEGORIES'), DEFAULT_CATEGORIES);
+    const transactions = getItem<Transaction[]>(this.key('TRANSACTIONS'), []);
+    const recurringBills = getItem<RecurringBill[]>(this.key('BILLS'), []);
+    const incomes = getItem<IncomeItem[]>(this.key('INCOMES'), []);
 
     const exportData: ExportDataStructure = {
       version: '1.0.0',
@@ -537,16 +631,16 @@ export class LocalDataManagementRepository implements IDataManagementRepository 
         }
       }
 
-      setItem(KEYS.SETTINGS, parsed.settings);
-      setItem(KEYS.CATEGORIES, parsed.categories);
-      setItem(KEYS.TRANSACTIONS, parsed.transactions);
+      setItem(this.key('SETTINGS'), parsed.settings);
+      setItem(this.key('CATEGORIES'), parsed.categories);
+      setItem(this.key('TRANSACTIONS'), parsed.transactions);
       if (Array.isArray(parsed.recurringBills)) {
-        setItem(KEYS.BILLS, parsed.recurringBills);
+        setItem(this.key('BILLS'), parsed.recurringBills);
       }
       if (Array.isArray(parsed.incomes)) {
-        setItem(KEYS.INCOMES, parsed.incomes);
+        setItem(this.key('INCOMES'), parsed.incomes);
       }
-      window.localStorage.setItem(KEYS.INITIALIZED, 'true');
+      window.localStorage.setItem(this.key('INITIALIZED'), 'true');
       return true;
     } catch (err) {
       console.error('[Mooney Repository] Import JSON thất bại:', err);
@@ -558,18 +652,34 @@ export class LocalDataManagementRepository implements IDataManagementRepository 
 // ----------------------------------------------------
 // Unified Mooney Data Service (Singleton)
 // ----------------------------------------------------
-const transactionRepo = new LocalTransactionRepository();
-const categoryRepo = new LocalCategoryRepository();
-const billRepo = new LocalRecurringBillRepository(transactionRepo);
-const incomeRepo = new LocalIncomeRepository();
-const settingsRepo = new LocalSettingsRepository();
-const dataManagementRepo = new LocalDataManagementRepository();
+export function createLocalRepositories(scope: StorageScope = GUEST_SCOPE) {
+  const transactions = new LocalTransactionRepository(scope);
+  return {
+    transactions,
+    categories: new LocalCategoryRepository(scope),
+    bills: new LocalRecurringBillRepository(transactions, scope),
+    incomes: new LocalIncomeRepository(scope),
+    settings: new LocalSettingsRepository(scope),
+    dataManagement: new LocalDataManagementRepository(scope),
+  };
+}
 
-export const mooneyRepository = {
-  transactions: transactionRepo,
-  categories: categoryRepo,
-  bills: billRepo,
-  incomes: incomeRepo,
-  settings: settingsRepo,
-  dataManagement: dataManagementRepo,
-};
+export type LocalRepositories = ReturnType<typeof createLocalRepositories>;
+
+let activeScope: StorageScope = GUEST_SCOPE;
+
+/**
+ * Repository đang phục vụ UI. Các thuộc tính được thay khi đổi phạm vi lưu trữ
+ * (đăng nhập / đăng xuất), nên luôn truy cập qua `mooneyRepository.xxx` tại thời điểm gọi.
+ */
+export const mooneyRepository: LocalRepositories = createLocalRepositories(activeScope);
+
+export function getActiveStorageScope(): StorageScope {
+  return activeScope;
+}
+
+export function setActiveStorageScope(scope: StorageScope): void {
+  if (scope === activeScope) return;
+  activeScope = scope;
+  Object.assign(mooneyRepository, createLocalRepositories(scope));
+}

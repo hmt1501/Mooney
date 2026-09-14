@@ -48,6 +48,7 @@ export default function ProfilePage() {
     importData,
     resetToSeedData,
     syncStatus,
+    syncError,
     lastSyncedAt,
     triggerSync,
   } = useMooneyData();
@@ -65,6 +66,21 @@ export default function ProfilePage() {
 
   // Hidden file input cho Import JSON
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Đồng bộ thủ công: chỉ báo thành công khi đồng bộ thực sự thành công
+  const handleSyncNow = async () => {
+    if (syncStatus === 'syncing') return;
+    const result = await triggerSync();
+    if (result.success) {
+      success(
+        result.syncedCount > 0
+          ? `Đã đồng bộ ${result.syncedCount} thay đổi với máy chủ!`
+          : 'Dữ liệu đã khớp với máy chủ.'
+      );
+    } else {
+      error(`Đồng bộ thất bại: ${result.error || 'Lỗi không xác định'}`);
+    }
+  };
 
   // Xử lý lưu số dư ban đầu
   const handleSaveStartingBalance = async (amount: number) => {
@@ -206,10 +222,8 @@ export default function ProfilePage() {
           <SyncStatusBadge
             status={syncStatus}
             lastSyncedAt={lastSyncedAt}
-            onTriggerSync={async () => {
-              await triggerSync();
-              success('Đã hoàn tất đồng bộ dữ liệu với máy chủ!');
-            }}
+            errorMessage={syncError}
+            onTriggerSync={user ? handleSyncNow : undefined}
           />
         </div>
 
@@ -244,20 +258,27 @@ export default function ProfilePage() {
               </div>
 
               <div className="flex items-center justify-between pt-2.5 border-t border-border/60">
-                <span className="text-[11px] text-text-muted">
-                  {lastSyncedAt
+                <span
+                  className={cn(
+                    'text-[11px] text-text-muted',
+                    syncStatus === 'error' && 'text-status-danger'
+                  )}
+                >
+                  {syncStatus === 'syncing'
+                    ? 'Đang đồng bộ dữ liệu...'
+                    : syncStatus === 'error'
+                    ? `Đồng bộ thất bại: ${syncError}`
+                    : lastSyncedAt
                     ? `Đồng bộ lúc: ${new Date(lastSyncedAt).toLocaleTimeString('vi-VN')} ${new Date(lastSyncedAt).toLocaleDateString('vi-VN')}`
                     : 'Chưa có lịch sử đồng bộ'}
                 </span>
                 <button
                   type="button"
-                  onClick={async () => {
-                    await triggerSync();
-                    success('Đã hoàn tất đồng bộ dữ liệu!');
-                  }}
-                  className="text-xs font-bold text-primary hover:underline"
+                  onClick={handleSyncNow}
+                  disabled={syncStatus === 'syncing'}
+                  className="text-xs font-bold text-primary hover:underline disabled:opacity-60 disabled:no-underline disabled:cursor-wait whitespace-nowrap"
                 >
-                  Đồng bộ ngay
+                  {syncStatus === 'syncing' ? 'Đang đồng bộ...' : 'Đồng bộ ngay'}
                 </button>
               </div>
             </div>

@@ -14,6 +14,24 @@ import {
 import { DEFAULT_SETTINGS } from '@/lib/constants/seedData';
 import { DEFAULT_CATEGORIES } from '@/lib/constants/categories';
 
+/**
+ * supabase-js trả lỗi dưới dạng giá trị ({ error }) thay vì ném exception.
+ * Mọi thao tác phục vụ đồng bộ phải gọi hàm này, nếu không lỗi sẽ bị nuốt mất
+ * và app báo "đã đồng bộ" dù cloud chưa nhận dữ liệu.
+ */
+export class SupabaseSyncError extends Error {
+  constructor(operation: string, public readonly cause: { message?: string; code?: string } | null) {
+    super(`${operation}: ${cause?.message || 'Lỗi không xác định từ Supabase'}`);
+    this.name = 'SupabaseSyncError';
+  }
+}
+
+function throwIfError(operation: string, error: { message?: string; code?: string } | null): void {
+  if (error) {
+    throw new SupabaseSyncError(operation, error);
+  }
+}
+
 // ==========================================
 // MAPPERS: CamelCase <-> SnakeCase
 // ==========================================
@@ -26,6 +44,7 @@ export function mapTransactionFromDb(row: any): Transaction {
     categoryId: row.category_id,
     date: row.date,
     note: row.note || undefined,
+    billId: row.bill_id || undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -40,6 +59,7 @@ export function mapTransactionToDb(item: Transaction, userId: string): any {
     category_id: item.categoryId,
     date: item.date,
     note: item.note || null,
+    bill_id: item.billId || null,
     created_at: item.createdAt,
     updated_at: item.updatedAt || new Date().toISOString(),
   };
@@ -50,6 +70,7 @@ export function mapIncomeFromDb(row: any): IncomeItem {
     id: row.id,
     name: row.name,
     amount: Number(row.amount),
+    categoryId: row.category_id || undefined,
     type: row.type,
     recurrence: row.recurrence,
     receiveDay: row.receive_day || undefined,
@@ -63,14 +84,24 @@ export function mapIncomeFromDb(row: any): IncomeItem {
 }
 
 export function mapIncomeToDb(item: IncomeItem, userId: string): any {
+  // Dữ liệu cũ có thể lưu recurrence dạng { frequency, dayOfMonth } -> chuẩn hóa về chuỗi
+  const recurrenceObject =
+    item.recurrence && typeof item.recurrence === 'object' ? item.recurrence : null;
+  const recurrence =
+    typeof item.recurrence === 'string'
+      ? item.recurrence
+      : recurrenceObject?.frequency || 'never';
+  const isRecurring = recurrence === 'monthly' || recurrence === 'weekly' || recurrence === 'yearly';
+
   return {
     id: item.id,
     user_id: userId,
     name: item.name,
     amount: item.amount,
-    type: item.type || (item.recurrence === 'monthly' ? 'recurring' : 'one_time'),
-    recurrence: typeof item.recurrence === 'string' ? item.recurrence : 'never',
-    receive_day: item.receiveDay || null,
+    category_id: item.categoryId || null,
+    type: item.type || (isRecurring ? 'recurring' : 'one_time'),
+    recurrence,
+    receive_day: item.receiveDay || recurrenceObject?.dayOfMonth || null,
     date: item.date || item.receivedDate || null,
     is_active: item.isActive !== false,
     note: item.note || null,
@@ -116,8 +147,14 @@ export function mapBillFromDb(row: any): RecurringBill {
     categoryId: row.category_id,
     repeat: row.recurrence || 'monthly',
     dueDate: row.due_date,
+    note: row.note || undefined,
     isActive: row.is_active !== false,
     lastPaidDate: row.last_paid_date || undefined,
+    lastPaidDueDate: row.last_paid_due_date || undefined,
+    paidOccurrences:
+      Array.isArray(row.paid_occurrences) && row.paid_occurrences.length > 0
+        ? row.paid_occurrences
+        : undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -132,8 +169,11 @@ export function mapBillToDb(item: RecurringBill, userId: string): any {
     category_id: item.categoryId,
     recurrence: item.repeat || 'monthly',
     due_date: item.dueDate,
+    note: item.note || null,
     is_active: item.isActive !== false,
     last_paid_date: item.lastPaidDate || null,
+    last_paid_due_date: item.lastPaidDueDate || null,
+    paid_occurrences: item.paidOccurrences || [],
     created_at: item.createdAt,
     updated_at: item.updatedAt || new Date().toISOString(),
   };
@@ -170,6 +210,29 @@ export function mapSettingsToDb(item: UserSettings, userId: string): any {
 export class SupabaseTransactionRepository implements ITransactionRepository {
   constructor(private supabase: SupabaseClient, private userId: string) {}
 
+  /** Upsert theo id và trả về bản ghi thực tế trên server (updated_at do server đặt). */
+  async upsertMany(items: Transaction[]): Promise<Transaction[]> {
+    if (items.length === 0) return [];
+    const { data, error } = await this.supabase
+      .from('transactions')
+      .upsert(items.map((item) => mapTransactionToDb(item, this.userId)), { onConflict: 'id' })
+      .select();
+
+    throwIfError('Đẩy giao dịch lên cloud', error);
+    return (data || []).map(mapTransactionFromDb);
+  }
+
+  async deleteMany(ids: string[]): Promise<void> {
+    if (ids.length === 0) return;
+    const { error } = await this.supabase
+      .from('transactions')
+      .delete()
+      .eq('user_id', this.userId)
+      .in('id', ids);
+
+    throwIfError('Xóa giao dịch trên cloud', error);
+  }
+
   async getAll(): Promise<Transaction[]> {
     const { data, error } = await this.supabase
       .from('transactions')
@@ -177,10 +240,7 @@ export class SupabaseTransactionRepository implements ITransactionRepository {
       .eq('user_id', this.userId)
       .order('date', { ascending: false });
 
-    if (error) {
-      console.error('[SupabaseTransactionRepository] getAll error:', error);
-      return [];
-    }
+    throwIfError('Tải giao dịch từ cloud', error);
     return (data || []).map(mapTransactionFromDb);
   }
 
@@ -277,6 +337,29 @@ export class SupabaseTransactionRepository implements ITransactionRepository {
 export class SupabaseIncomeRepository implements IIncomeRepository {
   constructor(private supabase: SupabaseClient, private userId: string) {}
 
+  /** Upsert theo id và trả về bản ghi thực tế trên server (updated_at do server đặt). */
+  async upsertMany(items: IncomeItem[]): Promise<IncomeItem[]> {
+    if (items.length === 0) return [];
+    const { data, error } = await this.supabase
+      .from('incomes')
+      .upsert(items.map((item) => mapIncomeToDb(item, this.userId)), { onConflict: 'id' })
+      .select();
+
+    throwIfError('Đẩy thu nhập lên cloud', error);
+    return (data || []).map(mapIncomeFromDb);
+  }
+
+  async deleteMany(ids: string[]): Promise<void> {
+    if (ids.length === 0) return;
+    const { error } = await this.supabase
+      .from('incomes')
+      .delete()
+      .eq('user_id', this.userId)
+      .in('id', ids);
+
+    throwIfError('Xóa thu nhập trên cloud', error);
+  }
+
   async getAll(): Promise<IncomeItem[]> {
     const { data, error } = await this.supabase
       .from('incomes')
@@ -284,10 +367,7 @@ export class SupabaseIncomeRepository implements IIncomeRepository {
       .eq('user_id', this.userId)
       .order('created_at', { ascending: false });
 
-    if (error) {
-      console.error('[SupabaseIncomeRepository] getAll error:', error);
-      return [];
-    }
+    throwIfError('Tải thu nhập từ cloud', error);
     return (data || []).map(mapIncomeFromDb);
   }
 
@@ -362,6 +442,29 @@ export class SupabaseIncomeRepository implements IIncomeRepository {
 export class SupabaseCategoryRepository implements ICategoryRepository {
   constructor(private supabase: SupabaseClient, private userId: string) {}
 
+  /** Upsert theo id và trả về bản ghi thực tế trên server (updated_at do server đặt). */
+  async upsertMany(items: Category[]): Promise<Category[]> {
+    if (items.length === 0) return [];
+    const { data, error } = await this.supabase
+      .from('categories')
+      .upsert(items.map((item) => mapCategoryToDb(item, this.userId)), { onConflict: 'id' })
+      .select();
+
+    throwIfError('Đẩy danh mục lên cloud', error);
+    return (data || []).map(mapCategoryFromDb);
+  }
+
+  async deleteMany(ids: string[]): Promise<void> {
+    if (ids.length === 0) return;
+    const { error } = await this.supabase
+      .from('categories')
+      .delete()
+      .eq('user_id', this.userId)
+      .in('id', ids);
+
+    throwIfError('Xóa danh mục trên cloud', error);
+  }
+
   async getAll(): Promise<Category[]> {
     const { data, error } = await this.supabase
       .from('categories')
@@ -369,7 +472,8 @@ export class SupabaseCategoryRepository implements ICategoryRepository {
       .eq('user_id', this.userId)
       .order('created_at', { ascending: true });
 
-    if (error || !data || data.length === 0) {
+    throwIfError('Tải danh mục từ cloud', error);
+    if (!data || data.length === 0) {
       return DEFAULT_CATEGORIES;
     }
     return data.map(mapCategoryFromDb);
@@ -441,6 +545,29 @@ export class SupabaseCategoryRepository implements ICategoryRepository {
 export class SupabaseRecurringBillRepository implements IRecurringBillRepository {
   constructor(private supabase: SupabaseClient, private userId: string) {}
 
+  /** Upsert theo id và trả về bản ghi thực tế trên server (updated_at do server đặt). */
+  async upsertMany(items: RecurringBill[]): Promise<RecurringBill[]> {
+    if (items.length === 0) return [];
+    const { data, error } = await this.supabase
+      .from('recurring_bills')
+      .upsert(items.map((item) => mapBillToDb(item, this.userId)), { onConflict: 'id' })
+      .select();
+
+    throwIfError('Đẩy hóa đơn lên cloud', error);
+    return (data || []).map(mapBillFromDb);
+  }
+
+  async deleteMany(ids: string[]): Promise<void> {
+    if (ids.length === 0) return;
+    const { error } = await this.supabase
+      .from('recurring_bills')
+      .delete()
+      .eq('user_id', this.userId)
+      .in('id', ids);
+
+    throwIfError('Xóa hóa đơn trên cloud', error);
+  }
+
   async getAll(): Promise<RecurringBill[]> {
     const { data, error } = await this.supabase
       .from('recurring_bills')
@@ -448,7 +575,7 @@ export class SupabaseRecurringBillRepository implements IRecurringBillRepository
       .eq('user_id', this.userId)
       .order('due_date', { ascending: true });
 
-    if (error) return [];
+    throwIfError('Tải hóa đơn từ cloud', error);
     return (data || []).map(mapBillFromDb);
   }
 
@@ -549,9 +676,34 @@ export class SupabaseSettingsRepository implements ISettingsRepository {
       .eq('user_id', this.userId)
       .maybeSingle();
 
-    if (error || !data) {
+    throwIfError('Tải cài đặt từ cloud', error);
+    if (!data) {
       return DEFAULT_SETTINGS;
     }
+    return mapSettingsFromDb(data);
+  }
+
+  /** Trả về null nếu cloud chưa có dòng settings cho user (khác với settings mặc định). */
+  async getRow(): Promise<UserSettings | null> {
+    const { data, error } = await this.supabase
+      .from('user_settings')
+      .select('*')
+      .eq('user_id', this.userId)
+      .maybeSingle();
+
+    throwIfError('Tải cài đặt từ cloud', error);
+    return data ? mapSettingsFromDb(data) : null;
+  }
+
+  /** Ghi settings và trả về bản ghi thực tế trên server (updated_at do server đặt). */
+  async upsert(settings: UserSettings): Promise<UserSettings> {
+    const { data, error } = await this.supabase
+      .from('user_settings')
+      .upsert(mapSettingsToDb(settings, this.userId), { onConflict: 'user_id' })
+      .select()
+      .single();
+
+    throwIfError('Đẩy cài đặt lên cloud', error);
     return mapSettingsFromDb(data);
   }
 
