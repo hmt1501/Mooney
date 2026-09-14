@@ -10,6 +10,7 @@ import {
   ICategoryRepository,
   IRecurringBillRepository,
   ISettingsRepository,
+  CreateTransactionOptions,
 } from './interfaces';
 import { DEFAULT_SETTINGS } from '@/lib/constants/seedData';
 import { DEFAULT_CATEGORIES } from '@/lib/constants/categories';
@@ -279,9 +280,9 @@ export class SupabaseTransactionRepository implements ITransactionRepository {
     return (data || []).map(mapTransactionFromDb);
   }
 
-  async create(input: CreateTransactionInput): Promise<Transaction> {
+  async create(input: CreateTransactionInput, options?: CreateTransactionOptions): Promise<Transaction> {
     const now = new Date().toISOString();
-    const id = `tx_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const id = options?.id || `tx_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     const tx: Transaction = {
       id,
       ...input,
@@ -290,6 +291,15 @@ export class SupabaseTransactionRepository implements ITransactionRepository {
     };
 
     const row = mapTransactionToDb(tx, this.userId);
+    if (options?.id) {
+      // Idempotent: gửi lại cùng id (bấm hai lần, mạng thử lại) không tạo bản ghi thứ hai
+      const { error } = await this.supabase
+        .from('transactions')
+        .upsert(row, { onConflict: 'id', ignoreDuplicates: true });
+      throwIfError('Tạo giao dịch trên cloud', error);
+      return (await this.getById(id)) ?? tx;
+    }
+
     const { error } = await this.supabase.from('transactions').insert(row);
     if (error) {
       console.error('[SupabaseTransactionRepository] create error:', error);

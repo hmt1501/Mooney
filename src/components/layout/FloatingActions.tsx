@@ -1,13 +1,15 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Camera, Mic } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { useToast } from '@/components/common/ToastContext';
+import { ReceiptScannerSheet } from '@/components/receipt/ReceiptScannerSheet';
 
 export function FloatingActions() {
   const pathname = usePathname();
   const { info } = useToast();
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
 
   if (pathname !== '/') return null;
 
@@ -16,6 +18,7 @@ export function FloatingActions() {
   };
 
   return (
+    <>
     <div
       className="fixed right-4 bottom-24 z-30 flex flex-col items-center gap-2.5 pointer-events-auto"
       style={{
@@ -25,9 +28,9 @@ export function FloatingActions() {
     >
       <button
         type="button"
-        onClick={() => handlePlaceholderClick('chụp hóa đơn (Camera)')}
-        aria-label="Chụp hóa đơn (Chưa khả dụng)"
-        className="group relative flex items-center justify-center w-11 h-11 rounded-full bg-surface dark:bg-surface-elevated text-text-secondary border border-border shadow-card hover:bg-surface-secondary active:scale-95 transition-all opacity-80 hover:opacity-100"
+        onClick={() => setIsScannerOpen(true)}
+        aria-label="Chụp hóa đơn"
+        className="group relative flex items-center justify-center w-11 h-11 rounded-full bg-surface dark:bg-surface-elevated text-primary border border-border shadow-card hover:bg-surface-secondary active:scale-95 transition-all"
       >
         <Camera className="w-5 h-5 stroke-[1.8]" />
       </button>
@@ -41,5 +44,8 @@ export function FloatingActions() {
         <Mic className="w-5 h-5 stroke-[1.8]" />
       </button>
     </div>
+
+    <ReceiptScannerSheet isOpen={isScannerOpen} onClose={() => setIsScannerOpen(false)} />
+    </>
   );
 }

@@ -31,6 +31,7 @@ import {
 } from '@/types/income';
 import { UserSettings, UpdateSettingsInput } from '@/types/settings';
 import { mooneyRepository, setActiveStorageScope } from '@/lib/repository/localRepository';
+import { CreateTransactionOptions } from '@/lib/repository/interfaces';
 import { calculateAvailableBalance, calculateSpentMoney } from '@/lib/calculations/financial';
 import { DEFAULT_SETTINGS } from '@/lib/constants/seedData';
 import { DEFAULT_CATEGORIES } from '@/lib/constants/categories';
@@ -67,7 +68,7 @@ interface MooneyDataContextType {
   lastSyncedAt: string | null;
 
   // Transaction actions
-  addTransaction: (input: CreateTransactionInput) => Promise<Transaction>;
+  addTransaction: (input: CreateTransactionInput, options?: CreateTransactionOptions) => Promise<Transaction>;
   updateTransaction: (
     id: string,
     input: UpdateTransactionInput
@@ -263,9 +264,12 @@ export function MooneyDataProvider({
 
   // Actions
   const addTransaction = useCallback(
-    async (input: CreateTransactionInput) => {
-      const created = await mooneyRepository.transactions.create(input);
-      setTransactions((prev) => [...prev, created]);
+    async (input: CreateTransactionInput, options?: CreateTransactionOptions) => {
+      const created = await mooneyRepository.transactions.create(input, options);
+      // Không nhân đôi trong state khi repository trả lại giao dịch đã có (idempotent)
+      setTransactions((prev) =>
+        prev.some((item) => item.id === created.id) ? prev : [...prev, created]
+      );
       return created;
     },
     []

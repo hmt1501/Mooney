@@ -6,6 +6,7 @@ import {
   ISettingsRepository,
   IDataManagementRepository,
   ExportDataStructure,
+  CreateTransactionOptions,
 } from './interfaces';
 import {
   Transaction,
@@ -121,11 +122,15 @@ export class LocalTransactionRepository implements ITransactionRepository {
     return list.filter((item) => item.date.startsWith(month));
   }
 
-  async create(input: CreateTransactionInput): Promise<Transaction> {
+  async create(input: CreateTransactionInput, options?: CreateTransactionOptions): Promise<Transaction> {
     const list = await this.getAll();
+    if (options?.id) {
+      const existing = list.find((item) => item.id === options.id);
+      if (existing) return existing;
+    }
     const now = new Date().toISOString();
     const newTx: Transaction = {
-      id: `tx-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      id: options?.id || `tx-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       type: input.type,
       amount: Math.abs(input.amount),
       categoryId: input.categoryId,

@@ -163,3 +163,10 @@ button {
   background: var(--color-border-default);
   border-radius: 9999px;
 }
+
+/* Receipt scanner: vệt quét nhẹ khi đang đọc hóa đơn */
+@keyframes receipt-scan {
+  0% { top: -15%; }
+  50% { top: 90%; }
+  100% { top: -15%; }
+}

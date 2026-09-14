@@ -28,12 +28,20 @@ export interface IIncomeRepository {
   delete(id: string): Promise<boolean>;
 }
 
+export interface CreateTransactionOptions {
+  /**
+   * Id do nơi gọi chỉ định, dùng làm khóa idempotency.
+   * Nếu đã có giao dịch với id này thì trả về giao dịch đó, không tạo thêm.
+   */
+  id?: string;
+}
+
 export interface ITransactionRepository {
   getAll(): Promise<Transaction[]>;
   getById(id: string): Promise<Transaction | null>;
   getByDate(date: string): Promise<Transaction[]>;
   getByMonth(month: string): Promise<Transaction[]>; // 'YYYY-MM'
-  create(input: CreateTransactionInput): Promise<Transaction>;
+  create(input: CreateTransactionInput, options?: CreateTransactionOptions): Promise<Transaction>;
   update(id: string, input: UpdateTransactionInput): Promise<Transaction>;
   delete(id: string): Promise<boolean>;
 }
