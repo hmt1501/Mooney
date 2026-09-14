@@ -1,15 +1,16 @@
 'use client';
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Camera, CameraOff, ImagePlus, RotateCcw, ScanLine, WifiOff } from 'lucide-react';
+import { Camera, CameraOff, ImagePlus, RotateCcw, ScanLine, ShieldCheck, WifiOff } from 'lucide-react';
 import { BottomSheet } from '@/components/common/BottomSheet';
 import { Mascot } from '@/components/common/Mascot';
 import { useToast } from '@/components/common/ToastContext';
 import { useMooneyData } from '@/hooks/useMooneyData';
 import { ReceiptCamera } from './ReceiptCamera';
-import { ReceiptReviewForm, ReceiptReviewValues } from './ReceiptReviewForm';
-import { ReceiptStateView, ReceiptStateAction } from './ReceiptStateView';
+import { ExpenseReviewForm, ExpenseReviewValues } from '@/components/transaction/ExpenseReviewForm';
+import { FlowStateView, FlowStateAction } from '@/components/common/FlowStateView';
 import { ExtractedField, ReceiptErrorCode, ReceiptExtraction } from '@/types/receipt';
+import { ExpenseDraft } from '@/types/expenseDraft';
 import { ReceiptError } from '@/lib/receipt/receiptError';
 import { prepareReceiptImage, PreparedReceiptImage } from '@/lib/receipt/imageProcessing';
 import { OcrPhase, recognizeReceiptText, releaseOcrEngine, warmUpOcrEngine } from '@/lib/receipt/ocrEngine';
@@ -217,7 +218,7 @@ export function ReceiptScannerSheet({ isOpen, onClose }: ReceiptScannerSheetProp
   });
   const existingTransaction = step.kind === 'review' ? transactions.find((tx) => tx.id === transactionId) ?? null : null;
 
-  const handleSubmit = async (values: ReceiptReviewValues) => {
+  const handleSubmit = async (values: ExpenseReviewValues) => {
     // Chặn bấm liên tiếp; kể cả khi lọt qua, id cố định đảm bảo chỉ có một giao dịch
     if (submittingRef.current) return;
     submittingRef.current = true;
@@ -239,17 +240,17 @@ export function ReceiptScannerSheet({ isOpen, onClose }: ReceiptScannerSheetProp
     }
   };
 
-  const retakeAction: ReceiptStateAction = cameraAvailable
+  const retakeAction: FlowStateAction = cameraAvailable
     ? { label: 'Chụp lại', onClick: retake, icon: Camera }
     : { label: 'Chọn ảnh khác', onClick: pickFile, icon: ImagePlus };
-  const pickAction: ReceiptStateAction = { label: 'Chọn ảnh có sẵn', onClick: pickFile, icon: ImagePlus };
+  const pickAction: FlowStateAction = { label: 'Chọn ảnh có sẵn', onClick: pickFile, icon: ImagePlus };
 
   const renderError = (code: ReceiptErrorCode) => {
-    const retryOcr: ReceiptStateAction | undefined = preparedRef.current
+    const retryOcr: FlowStateAction | undefined = preparedRef.current
       ? { label: 'Thử đọc lại', onClick: () => preparedRef.current && runOcr(preparedRef.current, preparedRef.current.isBlurry || preparedRef.current.isLowResolution), icon: RotateCcw }
       : undefined;
 
-    const views: Record<ReceiptErrorCode, React.ComponentProps<typeof ReceiptStateView>> = {
+    const views: Record<ReceiptErrorCode, React.ComponentProps<typeof FlowStateView>> = {
       camera_denied: {
         mood: 'warning',
         title: 'Mooney chưa được dùng camera',
@@ -319,13 +320,13 @@ export function ReceiptScannerSheet({ isOpen, onClose }: ReceiptScannerSheetProp
     };
 
     return (
-      <ReceiptStateView {...views[code]} onManualEntry={openManualEntry}>
+      <FlowStateView {...views[code]} onManualEntry={openManualEntry}>
         {code === 'network' ? (
           <StateIcon icon={WifiOff} />
         ) : CAMERA_ERRORS.includes(code) || code === 'camera_busy' ? (
           <StateIcon icon={CameraOff} />
         ) : undefined}
-      </ReceiptStateView>
+      </FlowStateView>
     );
   };
 
@@ -343,7 +344,7 @@ export function ReceiptScannerSheet({ isOpen, onClose }: ReceiptScannerSheetProp
       <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileChange} data-testid="receipt-file-input" />
 
       {step.kind === 'intro' && (
-        <ReceiptStateView
+        <FlowStateView
           title="Chụp biên lai chuyển khoản"
           description="Mooney sẽ đọc số tiền, ngày và người nhận để bạn kiểm tra rồi thêm khoản chi. Trình duyệt sẽ hỏi quyền dùng camera. Ảnh chỉ được đọc trên máy này và không được lưu."
           primary={{ label: 'Mở camera', onClick: openCamera, icon: Camera }}
@@ -351,7 +352,7 @@ export function ReceiptScannerSheet({ isOpen, onClose }: ReceiptScannerSheetProp
           onManualEntry={openManualEntry}
         >
           <StateIcon icon={ScanLine} />
-        </ReceiptStateView>
+        </FlowStateView>
       )}
 
       {step.kind === 'camera' && <ReceiptCamera onCapture={handleImage} onError={handleCameraError} onPickFile={pickFile} />}
@@ -361,7 +362,7 @@ export function ReceiptScannerSheet({ isOpen, onClose }: ReceiptScannerSheetProp
       )}
 
       {step.kind === 'blurry' && (
-        <ReceiptStateView
+        <FlowStateView
           mood="warning"
           title={step.reason === 'small' ? 'Ảnh hơi nhỏ' : 'Ảnh hơi mờ'}
           description={
@@ -377,18 +378,22 @@ export function ReceiptScannerSheet({ isOpen, onClose }: ReceiptScannerSheetProp
             // eslint-disable-next-line @next/next/no-img-element
             <img src={previewUrl} alt="Ảnh vừa chụp" className="w-28 h-36 object-cover rounded-2xl border border-border shadow-soft blur-[0.5px]" />
           ) : undefined}
-        </ReceiptStateView>
+        </FlowStateView>
       )}
 
       {step.kind === 'error' && renderError(step.code)}
 
       {step.kind === 'review' && (
-        <ReceiptReviewForm
+        <ExpenseReviewForm
           key={reviewKey}
-          extraction={step.extraction}
-          previewUrl={previewUrl}
+          draft={step.extraction ? receiptToDraft(step.extraction) : null}
           categories={categories}
+          banner={<ReceiptBanner previewUrl={previewUrl} />}
+          sourceBadge="Đọc từ ảnh"
+          noteLabel="Người nhận / Cửa hàng"
+          notePlaceholder="Ví dụ: Quán cơm Tấm, Nguyễn Văn A..."
           existingTransaction={existingTransaction}
+          existingTitle="Hóa đơn này đã được thêm rồi"
           isSaving={isSaving}
           saveError={saveError}
           retakeLabel={step.extraction ? (cameraAvailable ? 'Chụp lại' : 'Ảnh khác') : 'Quét ảnh'}
@@ -450,6 +455,31 @@ function ProcessingView({
       <button type="button" onClick={onCancel} className="text-xs font-bold text-text-secondary hover:text-text-primary">
         {cancelLabel}
       </button>
+    </div>
+  );
+}
+
+function receiptToDraft(extraction: ReceiptExtraction): ExpenseDraft {
+  return { amount: extraction.amount, date: extraction.date, note: extraction.merchant };
+}
+
+function ReceiptBanner({ previewUrl }: { previewUrl: string | null }) {
+  return (
+    <div className="flex items-center gap-3 p-3 rounded-3xl bg-primary-soft/60 border border-primary/10">
+      {previewUrl && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={previewUrl} alt="Ảnh hóa đơn vừa chụp" className="w-12 h-16 rounded-xl object-cover border border-border bg-surface" />
+      )}
+      <div className="flex flex-col gap-0.5 min-w-0">
+        <span className="text-xs font-extrabold text-text-primary">Kiểm tra lại giúp Mooney nhé</span>
+        <span className="text-[11px] text-text-secondary leading-snug">
+          Mooney tự đọc nên có thể nhầm. Bạn sửa được từng mục trước khi thêm.
+        </span>
+        <span className="flex items-center gap-1 text-[10px] font-semibold text-text-muted">
+          <ShieldCheck className="w-3 h-3" />
+          Ảnh chỉ đọc trên máy này và không được lưu
+        </span>
+      </div>
     </div>
   );
 }

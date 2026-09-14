@@ -3,19 +3,15 @@
 import React, { useState } from 'react';
 import { Camera, Mic } from 'lucide-react';
 import { usePathname } from 'next/navigation';
-import { useToast } from '@/components/common/ToastContext';
 import { ReceiptScannerSheet } from '@/components/receipt/ReceiptScannerSheet';
+import { VoiceExpenseSheet } from '@/components/voice/VoiceExpenseSheet';
 
 export function FloatingActions() {
   const pathname = usePathname();
-  const { info } = useToast();
   const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [isVoiceOpen, setIsVoiceOpen] = useState(false);
 
   if (pathname !== '/') return null;
-
-  const handlePlaceholderClick = (feature: string) => {
-    info(`Tính năng ${feature} sẽ ra mắt trong phiên bản tiếp theo!`);
-  };
 
   return (
     <>
@@ -37,15 +33,16 @@ export function FloatingActions() {
 
       <button
         type="button"
-        onClick={() => handlePlaceholderClick('nhập giọng nói (Microphone)')}
-        aria-label="Nhập giọng nói (Chưa khả dụng)"
-        className="group relative flex items-center justify-center w-11 h-11 rounded-full bg-surface dark:bg-surface-elevated text-text-secondary border border-border shadow-card hover:bg-surface-secondary active:scale-95 transition-all opacity-80 hover:opacity-100"
+        onClick={() => setIsVoiceOpen(true)}
+        aria-label="Nói khoản chi"
+        className="group relative flex items-center justify-center w-11 h-11 rounded-full bg-surface dark:bg-surface-elevated text-primary border border-border shadow-card hover:bg-surface-secondary active:scale-95 transition-all"
       >
         <Mic className="w-5 h-5 stroke-[1.8]" />
       </button>
     </div>
 
     <ReceiptScannerSheet isOpen={isScannerOpen} onClose={() => setIsScannerOpen(false)} />
+    <VoiceExpenseSheet isOpen={isVoiceOpen} onClose={() => setIsVoiceOpen(false)} />
     </>
   );
 }

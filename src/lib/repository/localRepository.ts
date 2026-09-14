@@ -84,7 +84,9 @@ function setItem<T>(key: string, value: T): void {
   try {
     window.localStorage.setItem(key, JSON.stringify(value));
   } catch (err) {
+    // Không nuốt lỗi (vd. bộ nhớ đầy): nơi gọi phải biết để không báo "đã lưu" khi dữ liệu chưa được ghi
     console.error(`[Mooney Repository] Lỗi ghi key ${key}:`, err);
+    throw new Error('Không ghi được dữ liệu vào bộ nhớ thiết bị.');
   }
 }
 

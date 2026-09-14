@@ -5,25 +5,25 @@ import { PenLine } from 'lucide-react';
 import { Mascot, MascotMood } from '@/components/common/Mascot';
 import { cn } from '@/lib/utils';
 
-export interface ReceiptStateAction {
+export interface FlowStateAction {
   label: string;
   onClick: () => void;
   icon?: React.ComponentType<{ className?: string }>;
 }
 
-interface ReceiptStateViewProps {
+interface FlowStateViewProps {
   mood?: MascotMood;
   title: string;
   description: string;
-  primary?: ReceiptStateAction;
-  secondary?: ReceiptStateAction;
+  primary?: FlowStateAction;
+  secondary?: FlowStateAction;
   onManualEntry?: () => void;
   children?: React.ReactNode;
   className?: string;
 }
 
-/** Trạng thái thân thiện dùng chung cho quyền camera, lỗi đọc ảnh, mất mạng... */
-export function ReceiptStateView({
+/** Trạng thái thân thiện dùng chung cho các luồng nhập nhanh (camera, giọng nói): quyền truy cập, lỗi, mất mạng... */
+export function FlowStateView({
   mood = 'normal',
   title,
   description,
@@ -32,7 +32,7 @@ export function ReceiptStateView({
   onManualEntry,
   children,
   className,
-}: ReceiptStateViewProps) {
+}: FlowStateViewProps) {
   return (
     <div className={cn('flex flex-col items-center text-center gap-4 py-2', className)} role="status">
       {children ?? <Mascot mood={mood} size={72} />}
