@@ -16,8 +16,8 @@ export function CalendarLegend({ spendingLevels, onOpenConfig }: CalendarLegendP
   return (
     <div className="flex items-center justify-between pt-2.5 border-t border-border/60 text-[11px] font-medium text-text-muted select-none">
       <div className="flex items-center gap-2.5 sm:gap-3 flex-wrap">
-        <span className="text-[10px] uppercase font-bold tracking-wider opacity-70">
-          Chi tiêu:
+        <span className="text-[11px] font-bold opacity-80">
+          Mức chi tiêu:
         </span>
         <span className="flex items-center gap-1">
           <span className="w-2.5 h-2.5 rounded-full bg-heat-low border border-heat-low-text/20" />

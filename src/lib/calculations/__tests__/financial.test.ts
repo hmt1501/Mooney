@@ -5,6 +5,7 @@ import {
   calculateSafeDailySpending,
   calculateCategoryTotals,
   calculateMonthlyRecap,
+  calculateAverageSpendingPerActiveDay,
 } from '../financial';
 import { getHeatLevel, DEFAULT_HEATMAP_THRESHOLDS } from '@/lib/constants/heatmap';
 import { Transaction } from '@/types/transaction';
@@ -425,5 +426,68 @@ describe('6. getHeatLevel', () => {
     expect(getHeatLevel(500_000)).toBe('medium');
     expect(getHeatLevel(500_001)).toBe('high');
     expect(getHeatLevel(2_000_000)).toBe('high');
+  });
+});
+
+describe('calculateAvailableBalance - giao dịch tương lai', () => {
+  const tx = (id: string, type: 'income' | 'expense', amount: number, date: string): Transaction => ({
+    id,
+    type,
+    amount,
+    categoryId: 'cat-any',
+    date,
+    createdAt: '',
+    updatedAt: '',
+  });
+
+  it('chưa tính giao dịch có ngày sau ngày tính, tính khi đã tới ngày', () => {
+    const transactions = [
+      tx('1', 'expense', 200_000, '2026-09-10'),
+      tx('2', 'income', 10_000_000, '2026-09-30'),
+      tx('3', 'expense', 500_000, '2026-09-20'),
+    ];
+
+    expect(calculateAvailableBalance(1_000_000, transactions, undefined, '2026-09-15')).toBe(800_000);
+    expect(calculateAvailableBalance(1_000_000, transactions, undefined, '2026-09-20')).toBe(300_000);
+    expect(calculateAvailableBalance(1_000_000, transactions, undefined, '2026-09-30')).toBe(10_300_000);
+  });
+});
+
+describe('calculateAverageSpendingPerActiveDay', () => {
+  const tx = (id: string, type: 'income' | 'expense', amount: number, date: string): Transaction => ({
+    id,
+    type,
+    amount,
+    categoryId: 'cat-any',
+    date,
+    createdAt: '',
+    updatedAt: '',
+  });
+
+  it('trả về 0 khi chưa có chi tiêu', () => {
+    expect(calculateAverageSpendingPerActiveDay([], '2026-09', '2026-09-15')).toBe(0);
+    expect(
+      calculateAverageSpendingPerActiveDay([tx('1', 'income', 5_000_000, '2026-09-01')], '2026-09', '2026-09-15')
+    ).toBe(0);
+  });
+
+  it('chia tổng chi cho số ngày có chi tiêu (không phải số ngày trong tháng)', () => {
+    const transactions = [
+      tx('1', 'expense', 100_000, '2026-09-02'),
+      tx('2', 'expense', 50_000, '2026-09-02'),
+      tx('3', 'expense', 150_000, '2026-09-10'),
+      tx('4', 'income', 9_000_000, '2026-09-05'),
+    ];
+    // (150k + 150k) / 2 ngày = 150k
+    expect(calculateAverageSpendingPerActiveDay(transactions, '2026-09', '2026-09-15')).toBe(150_000);
+  });
+
+  it('bỏ qua tháng khác và các ngày sau upToDate', () => {
+    const transactions = [
+      tx('1', 'expense', 90_000, '2026-09-03'),
+      tx('2', 'expense', 400_000, '2026-08-31'),
+      tx('3', 'expense', 700_000, '2026-09-25'),
+    ];
+    expect(calculateAverageSpendingPerActiveDay(transactions, '2026-09', '2026-09-15')).toBe(90_000);
   });
 });

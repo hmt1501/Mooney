@@ -1,48 +1,46 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
 import { useMooneyData } from '@/hooks/useMooneyData';
+import { useSelectedMonth } from '@/hooks/useSelectedMonth';
 import { useToast } from '@/components/common/ToastContext';
-import { MonthSelector } from '@/components/home/MonthSelector';
 import { AvailableMoneyBanner } from '@/components/home/AvailableMoneyBanner';
 import { FinancialCalendar } from '@/components/calendar/FinancialCalendar';
 import { SpendingLevelModal } from '@/components/calendar/SpendingLevelModal';
 import { UpcomingBillsPreview } from '@/components/home/UpcomingBillsPreview';
 import { DailyDetailSheet } from '@/components/transaction/DailyDetailSheet';
 import { TransactionFormSheet } from '@/components/transaction/TransactionFormSheet';
-import { Modal } from '@/components/common/Modal';
 import { LoadingState } from '@/components/common/LoadingState';
 import { toDateString } from '@/lib/utils/date';
-import { calculateSafeDailySpending, calculateSpendingPace } from '@/lib/calculations/financial';
+import {
+  calculateAverageSpendingPerActiveDay,
+  calculateSafeDailySpending,
+  calculateSpendingPace,
+} from '@/lib/calculations/financial';
 import { getDaysInMonth } from '@/lib/calculations/income';
 import { Transaction, TransactionType } from '@/types/transaction';
 import { SpendingLevelConfig } from '@/types/settings';
 import { formatCurrency } from '@/lib/utils/currency';
 
 export default function CalendarHomePage() {
-  const router = useRouter();
   const {
     transactions,
     categories,
     bills,
     settings,
     availableBalance,
-    spentMoney,
     isLoading,
     addTransaction,
     updateTransaction,
     deleteTransaction,
     markBillAsPaid,
-    updateStartingBalance,
     updateSettings,
   } = useMooneyData();
 
   const { success, error } = useToast();
 
   const now = useMemo(() => new Date(), []);
-  const [year, setYear] = useState<number>(now.getFullYear());
-  const [month, setMonth] = useState<number>(now.getMonth() + 1); // 1-12
+  const { year, month } = useSelectedMonth(); // 1-12, điều khiển từ TopHeader
   const [selectedDate, setSelectedDate] = useState<string>(toDateString(now));
 
   // Sheets & Modals state
@@ -51,25 +49,24 @@ export default function CalendarHomePage() {
   const [formType, setFormType] = useState<TransactionType>('expense');
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);
 
-  // Modal chỉnh sửa Số dư ban đầu & Spending Levels
-  const [isBalanceModalOpen, setIsBalanceModalOpen] = useState<boolean>(false);
+  // Modal tùy chỉnh Mức chi tiêu (Heatmap)
   const [isSpendingConfigOpen, setIsSpendingConfigOpen] = useState<boolean>(false);
-  const [startingBalanceInput, setStartingBalanceInput] = useState<string>('');
 
   // Lọc transactions của tháng đang xem để tính tổng thu & tổng chi
   const monthPrefix = `${year}-${String(month).padStart(2, '0')}`;
 
-  const { totalIncomeMonth, totalExpenseMonth } = useMemo(() => {
-    let inc = 0;
+  const totalExpenseMonth = useMemo(() => {
     let exp = 0;
     for (const tx of transactions) {
-      if (tx.date.startsWith(monthPrefix)) {
-        if (tx.type === 'income') inc += tx.amount;
-        else if (tx.type === 'expense') exp += tx.amount;
-      }
+      if (tx.type === 'expense' && tx.date.startsWith(monthPrefix)) exp += tx.amount;
     }
-    return { totalIncomeMonth: inc, totalExpenseMonth: exp };
+    return exp;
   }, [transactions, monthPrefix]);
+
+  // Giá trị chi tiêu trung bình mỗi ngày có chi tiêu (tính đến hôm nay)
+  const averageDailySpending = useMemo(() => {
+    return calculateAverageSpendingPerActiveDay(transactions, monthPrefix, toDateString(now));
+  }, [transactions, monthPrefix, now]);
 
   // Tính hạn mức chi tiêu an toàn hàng ngày cho ngày đang chọn
   const safeDailyResult = useMemo(() => {
@@ -160,19 +157,6 @@ export default function CalendarHomePage() {
     }
   };
 
-  // Mở modal sửa số dư ban đầu
-  const handleOpenStartingBalanceModal = () => {
-    setStartingBalanceInput(String(settings.startingBalance));
-    setIsBalanceModalOpen(true);
-  };
-
-  const handleSaveStartingBalance = async () => {
-    const raw = parseInt(startingBalanceInput.replace(/\D/g, '') || '0', 10);
-    await updateStartingBalance(raw);
-    setIsBalanceModalOpen(false);
-    success(`Đã cập nhật số dư ban đầu: ${formatCurrency(raw)}`);
-  };
-
   const handleSaveSpendingLevels = async (levels: SpendingLevelConfig) => {
     await updateSettings({ spendingLevels: levels });
     setIsSpendingConfigOpen(false);
@@ -190,27 +174,16 @@ export default function CalendarHomePage() {
 
   return (
     <div className="flex flex-col gap-5 pt-1">
-      {/* 1. Month Selector */}
-      <MonthSelector
-        year={year}
-        month={month}
-        onMonthChange={(newYear, newMonth) => {
-          setYear(newYear);
-          setMonth(newMonth);
-        }}
-      />
-
-      {/* 2. Unified Financial Banner (Available Money ↔ Spent Money) */}
+      {/* 1. Unified Financial Banner (Available Money ↔ Spent Money) */}
       <AvailableMoneyBanner
         availableBalance={availableBalance}
-        spentMoney={spentMoney}
+        monthExpense={totalExpenseMonth}
+        averageDailySpending={averageDailySpending}
         safeDailyResult={safeDailyResult}
         spendingPace={spendingPace}
-        onOpenStartingBalance={handleOpenStartingBalanceModal}
-        onNavigateToIncome={() => router.push('/income')}
       />
 
-      {/* 3. Financial Calendar (T2 - CN, Heatmap, Single & Double tap, Spending Level Gear) */}
+      {/* 2. Financial Calendar (T2 - CN, Heatmap, Single & Double tap, Spending Level Gear) */}
       <FinancialCalendar
         year={year}
         month={month}
@@ -222,14 +195,14 @@ export default function CalendarHomePage() {
         onOpenSpendingConfig={() => setIsSpendingConfigOpen(true)}
       />
 
-      {/* 5. Upcoming Bills Preview */}
+      {/* 3. Upcoming Bills Preview */}
       <UpcomingBillsPreview
         bills={bills}
         categories={categories}
         onMarkPaid={handleMarkBillPaid}
       />
 
-      {/* 6. Daily Detail Bottom Sheet */}
+      {/* 4. Daily Detail Bottom Sheet */}
       <DailyDetailSheet
         isOpen={isDailyDetailOpen}
         onClose={() => setIsDailyDetailOpen(false)}
@@ -241,7 +214,7 @@ export default function CalendarHomePage() {
         onDeleteTransaction={handleDeleteTransaction}
       />
 
-      {/* 7. Quick Transaction Entry Bottom Sheet */}
+      {/* 5. Quick Transaction Entry Bottom Sheet */}
       <TransactionFormSheet
         isOpen={isTransactionFormOpen}
         onClose={() => {
@@ -256,46 +229,7 @@ export default function CalendarHomePage() {
         onDelete={handleDeleteTransaction}
       />
 
-      {/* 8. Starting Balance Modal */}
-      <Modal
-        isOpen={isBalanceModalOpen}
-        onClose={() => setIsBalanceModalOpen(false)}
-        title="Số Dư Ban Đầu"
-        description="Số tiền bạn có khi bắt đầu sử dụng Mooney. Đây là mốc xuất phát để tính Số Tiền Khả Dụng."
-        confirmText="Lưu số dư"
-        cancelText="Hủy"
-        onConfirm={handleSaveStartingBalance}
-      >
-        <div className="flex flex-col gap-2 my-2">
-          <label className="text-xs font-bold text-text-muted">
-            Nhập số tiền ban đầu (VNĐ)
-          </label>
-          <div className="relative flex items-center">
-            <input
-              type="text"
-              inputMode="numeric"
-              value={
-                parseInt(startingBalanceInput.replace(/\D/g, '') || '0', 10) > 0
-                  ? parseInt(
-                      startingBalanceInput.replace(/\D/g, '') || '0',
-                      10
-                    ).toLocaleString('vi-VN')
-                  : ''
-              }
-              onChange={(e) =>
-                setStartingBalanceInput(e.target.value.replace(/\D/g, ''))
-              }
-              placeholder="5.000.000"
-              className="w-full px-4 py-3 rounded-2xl bg-surface-secondary text-xl font-bold text-text-primary focus:outline-none focus:ring-2 focus:ring-primary"
-            />
-            <span className="absolute right-4 font-bold text-text-muted">
-              đ
-            </span>
-          </div>
-        </div>
-      </Modal>
-
-      {/* 9. Spending Level Customization Modal */}
+      {/* 6. Spending Level Customization Modal */}
       <SpendingLevelModal
         isOpen={isSpendingConfigOpen}
         onClose={() => setIsSpendingConfigOpen(false)}

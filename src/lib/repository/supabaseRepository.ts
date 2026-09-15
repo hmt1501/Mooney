@@ -186,7 +186,7 @@ export function mapSettingsFromDb(row: any): UserSettings {
     startingBalance: Number(row.starting_balance || 0),
     currency: row.currency || 'VND',
     heatmapTheme: row.heatmap_theme || 'forest',
-    theme: row.theme || 'system',
+    theme: row.theme || 'light',
     spendingLevels: row.spending_levels || DEFAULT_SETTINGS.spendingLevels,
     updatedAt: row.updated_at || new Date().toISOString(),
   };

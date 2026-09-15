@@ -25,8 +25,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       if (savedTheme && (savedTheme === 'light' || savedTheme === 'dark' || savedTheme === 'system')) {
         setThemeState(savedTheme);
       } else {
-        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        setThemeState(prefersDark ? 'dark' : 'light');
+        // Mặc định giao diện sáng khi người dùng chưa chọn
+        setThemeState('light');
       }
     } catch {
       // Fallback if localStorage unavailable

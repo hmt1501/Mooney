@@ -21,15 +21,19 @@ import { formatCurrency } from '@/lib/utils/currency';
 import { formatDateDMY, toDateString } from '@/lib/utils/date';
 
 type Step =
-  | { kind: 'intro' }
   | { kind: 'camera' }
   | { kind: 'processing'; phase: 'preparing' | OcrPhase; progress: number }
   | { kind: 'blurry'; reason: 'blurry' | 'small' }
   | { kind: 'error'; code: ReceiptErrorCode }
   | { kind: 'review'; extraction: ReceiptExtraction | null };
 
+export type ReceiptScanMode = 'camera' | 'library';
+
 interface ReceiptScannerSheetProps {
   isOpen: boolean;
+  /** camera: mở thẳng khung chụp; library: đọc ảnh đã chọn từ thư viện (initialImage) */
+  mode: ReceiptScanMode;
+  initialImage?: File | null;
   onClose: () => void;
 }
 
@@ -47,11 +51,11 @@ function downgradeConfidence(extraction: ReceiptExtraction): ReceiptExtraction {
   };
 }
 
-export function ReceiptScannerSheet({ isOpen, onClose }: ReceiptScannerSheetProps) {
+export function ReceiptScannerSheet({ isOpen, mode, initialImage = null, onClose }: ReceiptScannerSheetProps) {
   const { categories, transactions, addTransaction } = useMooneyData();
   const { success } = useToast();
 
-  const [step, setStep] = useState<Step>({ kind: 'intro' });
+  const [step, setStep] = useState<Step>({ kind: 'camera' });
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [cameraAvailable, setCameraAvailable] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -72,43 +76,13 @@ export function ReceiptScannerSheet({ isOpen, onClose }: ReceiptScannerSheetProp
     });
   }, []);
 
-  // Mở: phiên quét mới + chọn bước đầu tiên theo quyền camera hiện có
-  useEffect(() => {
-    if (!isOpen) return;
-    sessionIdRef.current = createScanSessionId();
-    setSaveError(null);
-
-    const supported = typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia && window.isSecureContext;
-    if (!supported) {
-      cameraErrorRef.current = 'camera_unsupported';
-      setCameraAvailable(false);
-      setStep({ kind: 'error', code: 'camera_unsupported' });
-      return;
-    }
-
-    let cancelled = false;
-    setCameraAvailable(true);
-    setStep({ kind: 'intro' });
-    navigator.permissions
-      ?.query({ name: 'camera' as PermissionName })
-      .then((status) => {
-        if (cancelled) return;
-        if (status.state === 'granted') setStep({ kind: 'camera' });
-        // 'denied' vẫn hiện màn giới thiệu: người dùng có thể đã bật lại quyền và muốn thử
-      })
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [isOpen]);
-
   // Đóng: dọn ảnh, bộ nhận dạng, trạng thái. Ảnh không được giữ lại ở bất kỳ đâu.
   const handleClose = useCallback(() => {
     runIdRef.current++;
     preparedRef.current = null;
     replacePreview(null);
     releaseOcrEngine();
-    setStep({ kind: 'intro' });
+    setStep({ kind: 'camera' });
     setIsSaving(false);
     onClose();
   }, [onClose, replacePreview]);
@@ -170,6 +144,29 @@ export function ReceiptScannerSheet({ isOpen, onClose }: ReceiptScannerSheetProp
   );
 
   const pickFile = () => fileInputRef.current?.click();
+
+  // Mở: phiên quét mới, đi thẳng vào bước đã chọn từ nút camera (Chụp ảnh / Thư viện ảnh)
+  useEffect(() => {
+    if (!isOpen) return;
+    sessionIdRef.current = createScanSessionId();
+    setSaveError(null);
+
+    const supported = typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia && window.isSecureContext;
+    setCameraAvailable(supported);
+    if (!supported) cameraErrorRef.current = 'camera_unsupported';
+
+    if (mode === 'library' && initialImage) {
+      handleImage(initialImage);
+      return;
+    }
+    if (!supported) {
+      setStep({ kind: 'error', code: 'camera_unsupported' });
+      return;
+    }
+    warmUpOcrEngine();
+    setStep({ kind: 'camera' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- chỉ chạy khi mở sheet hoặc đổi ảnh đầu vào
+  }, [isOpen, mode, initialImage]);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -331,7 +328,6 @@ export function ReceiptScannerSheet({ isOpen, onClose }: ReceiptScannerSheetProp
   };
 
   const titles: Record<Step['kind'], string> = {
-    intro: 'Chụp hóa đơn',
     camera: 'Chụp hóa đơn',
     processing: 'Đang đọc hóa đơn',
     blurry: step.kind === 'blurry' && step.reason === 'small' ? 'Ảnh hơi nhỏ' : 'Ảnh hơi mờ',
@@ -342,18 +338,6 @@ export function ReceiptScannerSheet({ isOpen, onClose }: ReceiptScannerSheetProp
   return (
     <BottomSheet isOpen={isOpen} onClose={handleClose} title={titles[step.kind]} className="max-h-[92vh]">
       <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileChange} data-testid="receipt-file-input" />
-
-      {step.kind === 'intro' && (
-        <FlowStateView
-          title="Chụp biên lai chuyển khoản"
-          description="Mooney sẽ đọc số tiền, ngày và người nhận để bạn kiểm tra rồi thêm khoản chi. Trình duyệt sẽ hỏi quyền dùng camera. Ảnh chỉ được đọc trên máy này và không được lưu."
-          primary={{ label: 'Mở camera', onClick: openCamera, icon: Camera }}
-          secondary={pickAction}
-          onManualEntry={openManualEntry}
-        >
-          <StateIcon icon={ScanLine} />
-        </FlowStateView>
-      )}
 
       {step.kind === 'camera' && <ReceiptCamera onCapture={handleImage} onError={handleCameraError} onPickFile={pickFile} />}
 

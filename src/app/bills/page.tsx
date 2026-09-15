@@ -169,36 +169,20 @@ export default function BillsPage() {
 
   return (
     <div className="flex flex-col gap-4 pt-1 pb-6">
-      {/* 1. Header Trang & Nút Thêm Hóa Đơn */}
-      <div className="flex items-center justify-between px-1">
-        <div>
-          <h2 className="text-xl font-black text-text-primary tracking-tight">
-            Hóa Đơn Định Kỳ
-          </h2>
-          <p className="text-xs text-text-muted mt-0.5">
-            Quản lý các khoản chi lặp lại & kế hoạch sắp đến hạn
-          </p>
-        </div>
-
-        <button
-          type="button"
-          onClick={handleOpenCreate}
-          className="flex items-center gap-1.5 px-3.5 py-2 rounded-2xl bg-primary text-white text-xs font-black hover:bg-primary-hover active:scale-95 transition-all shadow-soft"
-        >
-          <Plus className="w-4 h-4 stroke-[2.5]" />
-          <span>Thêm HĐ</span>
-        </button>
-      </div>
-
-      {/* 2. Thẻ Thống Kê Tổng Quan Hóa Đơn */}
+      {/* 1. Thẻ Thống Kê Tổng Quan Hóa Đơn */}
       <div className="p-4 rounded-3xl bg-surface dark:bg-surface-elevated border border-border/80 shadow-soft flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <span className="text-xs font-bold text-text-muted uppercase tracking-wider">
             Tổng cần thanh toán
           </span>
-          <span className="text-xs font-bold text-text-muted">
-            {bills.length} hóa đơn
-          </span>
+          <button
+            type="button"
+            onClick={handleOpenCreate}
+            className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-primary text-primary-content text-xs font-black hover:bg-primary-hover active:scale-95 transition-all shadow-soft"
+          >
+            <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+            <span>Thêm HĐ</span>
+          </button>
         </div>
 
         <div className="flex items-baseline justify-between">
@@ -242,7 +226,7 @@ export default function BillsPage() {
         </div>
       </div>
 
-      {/* 3. Phân Đoạn Lọc Tabs (Segmented Control) */}
+      {/* 2. Phân Đoạn Lọc Tabs (Segmented Control) */}
       <div className="grid grid-cols-3 gap-1 p-1 bg-surface-secondary rounded-2xl border border-border">
         <button
           type="button"
@@ -286,7 +270,7 @@ export default function BillsPage() {
         </button>
       </div>
 
-      {/* 4. Danh Sách Thẻ Hóa Đơn */}
+      {/* 3. Danh Sách Thẻ Hóa Đơn */}
       {filteredBills.length === 0 ? (
         <EmptyState
           icon={ReceiptText}
@@ -319,7 +303,7 @@ export default function BillsPage() {
         </div>
       )}
 
-      {/* 5. BottomSheet Thêm / Chỉnh Sửa Hóa Đơn */}
+      {/* 4. BottomSheet Thêm / Chỉnh Sửa Hóa Đơn */}
       <BillFormSheet
         isOpen={isFormOpen}
         onClose={() => setIsFormOpen(false)}
@@ -329,7 +313,7 @@ export default function BillsPage() {
         onDelete={handleDeleteBill}
       />
 
-      {/* 6. Modal Xác Nhận Thanh Toán Hóa Đơn */}
+      {/* 5. Modal Xác Nhận Thanh Toán Hóa Đơn */}
       <Modal
         isOpen={!!billToPay}
         onClose={() => setBillToPay(null)}

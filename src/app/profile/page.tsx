@@ -13,7 +13,7 @@ import { SyncStatusBadge } from '@/components/auth/SyncStatusBadge';
 import { Modal } from '@/components/common/Modal';
 import { Mascot } from '@/components/common/Mascot';
 import { formatCurrency } from '@/lib/utils/currency';
-import { HeatmapTheme } from '@/types/settings';
+import { HeatmapTheme, ThemeMode } from '@/types/settings';
 import {
   Wallet,
   Sun,
@@ -24,16 +24,21 @@ import {
   Download,
   Upload,
   RotateCcw,
-  ShieldCheck,
   ChevronRight,
   Heart,
-  Sparkles,
   Coins,
+  Languages,
   Cloud,
   LogOut,
   User,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+
+const THEME_OPTIONS: { value: ThemeMode; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+  { value: 'light', label: 'Sáng', icon: Sun },
+  { value: 'dark', label: 'Tối', icon: Moon },
+  { value: 'system', label: 'Hệ thống', icon: Monitor },
+];
 
 export default function ProfilePage() {
   const {
@@ -166,17 +171,7 @@ export default function ProfilePage() {
 
   return (
     <div className="flex flex-col gap-5 pt-1 pb-8">
-      {/* 1. Header Trang */}
-      <div className="px-1">
-        <h2 className="text-xl font-black text-text-primary tracking-tight">
-          Cá Nhân & Cài Đặt
-        </h2>
-        <p className="text-xs text-text-muted mt-0.5">
-          Quản lý số dư, chủ đề giao diện và dữ liệu ứng dụng
-        </p>
-      </div>
-
-      {/* 2. Thẻ Tổng Quan Tài Chính: Available Balance & Starting Balance */}
+      {/* 1. SỐ DƯ KHẢ DỤNG HIỆN TẠI */}
       <div className="p-4 rounded-3xl bg-surface dark:bg-surface-elevated border border-border/80 shadow-soft flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <span className="text-xs font-bold text-text-muted uppercase tracking-wider">
@@ -185,27 +180,15 @@ export default function ProfilePage() {
           <Mascot mood={availableBalance >= 0 ? 'happy' : 'warning'} size={32} />
         </div>
 
-
-        <div>
-          <span className="text-2xl font-black text-text-primary tracking-tight tabular-nums">
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-2xl font-black text-text-primary tracking-tight tabular-nums truncate">
             {formatCurrency(availableBalance)}
           </span>
-        </div>
-
-        <div className="flex items-center justify-between pt-2.5 border-t border-border/60">
-          <div className="flex flex-col">
-            <span className="text-[11px] font-bold text-text-muted">
-              Số dư ban đầu xuất phát:
-            </span>
-            <span className="text-xs font-black text-text-primary tabular-nums mt-0.5">
-              {formatCurrency(settings.startingBalance)}
-            </span>
-          </div>
 
           <button
             type="button"
             onClick={() => setIsStartingBalanceOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary-soft text-primary text-xs font-bold hover:bg-primary hover:text-white active:scale-95 transition-all"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary-soft text-primary text-xs font-bold hover:bg-primary hover:text-white active:scale-95 transition-all shrink-0"
           >
             <Wallet className="w-3.5 h-3.5" />
             <span>Sửa số dư</span>
@@ -213,7 +196,7 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      {/* 2.5. Thẻ TÀI KHOẢN & ĐỒNG BỘ ĐÁM MÂY (Cloud Sync) */}
+      {/* 2. TÀI KHOẢN & ĐỒNG BỘ ĐÁM MÂY (Cloud Sync) */}
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between px-1">
           <span className="text-xs font-black uppercase tracking-wider text-text-muted">
@@ -311,145 +294,68 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      {/* 3. Mục THIẾT LẬP TIỀN */}
+      {/* 3. GIAO DIỆN & TÙY CHỌN */}
       <div className="flex flex-col gap-2">
         <span className="text-xs font-black uppercase tracking-wider text-text-muted px-1">
-          Thiết Lập Tiền
+          Giao Diện & Tùy Chọn
         </span>
 
         <div className="flex flex-col rounded-3xl bg-surface dark:bg-surface-elevated border border-border/80 shadow-soft overflow-hidden">
-          {/* Hàng Số dư ban đầu */}
-          <div
-            onClick={() => setIsStartingBalanceOpen(true)}
-            className="flex items-center justify-between p-3.5 hover:bg-surface-secondary/50 active:bg-surface-secondary cursor-pointer transition-colors border-b border-border/60"
-          >
+          {/* Giao diện: Sáng / Tối / Hệ thống */}
+          <div className="flex flex-col gap-2.5 p-3.5 border-b border-border/60">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-2xl bg-primary-soft text-primary flex items-center justify-center">
-                <Wallet className="w-4 h-4" />
+                <Sun className="w-4 h-4" />
               </div>
-              <div className="flex flex-col">
-                <span className="text-xs font-bold text-text-primary">
-                  Số Dư Ban Đầu
-                </span>
-                <span className="text-[11px] text-text-muted">
-                  Mốc khởi điểm tính số dư khả dụng
-                </span>
-              </div>
+              <span className="text-xs font-bold text-text-primary">Giao Diện</span>
             </div>
 
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-black text-text-primary tabular-nums">
-                {formatCurrency(settings.startingBalance)}
-              </span>
-              <ChevronRight className="w-4 h-4 text-text-muted" />
+            <div className="grid grid-cols-3 gap-2">
+              {THEME_OPTIONS.map(({ value, label, icon: Icon }) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => handleChangeTheme(value)}
+                  className={cn(
+                    'flex flex-col items-center gap-1.5 p-2.5 rounded-2xl border text-xs font-bold transition-all active:scale-95',
+                    theme === value
+                      ? 'bg-primary-soft text-primary border-primary/40 shadow-xs'
+                      : 'bg-surface-secondary border-transparent text-text-secondary hover:text-text-primary'
+                  )}
+                >
+                  <Icon className="w-5 h-5" />
+                  <span>{label}</span>
+                </button>
+              ))}
             </div>
           </div>
 
-          {/* Hàng Tiền tệ */}
-          <div className="flex items-center justify-between p-3.5">
+          {/* Ngôn ngữ */}
+          <div className="flex items-center justify-between p-3.5 border-b border-border/60">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-2xl bg-surface-secondary text-text-muted flex items-center justify-center">
+                <Languages className="w-4 h-4" />
+              </div>
+              <span className="text-xs font-bold text-text-primary">Ngôn Ngữ</span>
+            </div>
+            <span className="px-2.5 py-1 rounded-full text-xs font-extrabold bg-surface-secondary text-text-primary">
+              Tiếng Việt
+            </span>
+          </div>
+
+          {/* Đơn vị tiền tệ */}
+          <div className="flex items-center justify-between p-3.5 border-b border-border/60">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-2xl bg-surface-secondary text-text-muted flex items-center justify-center">
                 <Coins className="w-4 h-4" />
               </div>
-              <div className="flex flex-col">
-                <span className="text-xs font-bold text-text-primary">
-                  Đơn Vị Tiền Tệ
-                </span>
-                <span className="text-[11px] text-text-muted">
-                  Đồng Việt Nam (VND)
-                </span>
-              </div>
+              <span className="text-xs font-bold text-text-primary">Đơn Vị Tiền Tệ</span>
             </div>
-
             <span className="px-2.5 py-1 rounded-full text-xs font-extrabold bg-surface-secondary text-text-primary">
               ₫ (VND)
             </span>
           </div>
-        </div>
-      </div>
 
-      {/* 4. Mục GIAO DIỆN & CHỦ ĐỀ */}
-      <div className="flex flex-col gap-2">
-        <span className="text-xs font-black uppercase tracking-wider text-text-muted px-1">
-          Giao Diện & Hiển Thị
-        </span>
-
-        <div className="p-4 rounded-3xl bg-surface dark:bg-surface-elevated border border-border/80 shadow-soft flex flex-col gap-4">
-          {/* Chế độ Sáng / Tối / Hệ thống */}
-          <div className="flex flex-col gap-2">
-            <span className="text-xs font-bold text-text-primary">
-              Chế độ màu giao diện
-            </span>
-
-            <div className="grid grid-cols-3 gap-2">
-              <button
-                type="button"
-                onClick={() => handleChangeTheme('light')}
-                className={cn(
-                  'flex flex-col items-center gap-1.5 p-3 rounded-2xl border text-xs font-bold transition-all active:scale-95',
-                  theme === 'light'
-                    ? 'bg-primary-soft text-primary border-primary/40 shadow-xs'
-                    : 'bg-surface-secondary border-transparent text-text-secondary hover:text-text-primary'
-                )}
-              >
-                <Sun className="w-5 h-5" />
-                <span>Sáng</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleChangeTheme('dark')}
-                className={cn(
-                  'flex flex-col items-center gap-1.5 p-3 rounded-2xl border text-xs font-bold transition-all active:scale-95',
-                  theme === 'dark'
-                    ? 'bg-primary-soft text-primary border-primary/40 shadow-xs'
-                    : 'bg-surface-secondary border-transparent text-text-secondary hover:text-text-primary'
-                )}
-              >
-                <Moon className="w-5 h-5" />
-                <span>Tối</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleChangeTheme('system')}
-                className={cn(
-                  'flex flex-col items-center gap-1.5 p-3 rounded-2xl border text-xs font-bold transition-all active:scale-95',
-                  theme === 'system'
-                    ? 'bg-primary-soft text-primary border-primary/40 shadow-xs'
-                    : 'bg-surface-secondary border-transparent text-text-secondary hover:text-text-primary'
-                )}
-              >
-                <Monitor className="w-5 h-5" />
-                <span>Hệ thống</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Bảng màu Heatmap chi tiêu Lịch */}
-          <div className="flex flex-col gap-2 pt-3 border-t border-border/60">
-            <div className="flex items-center gap-1.5">
-              <Palette className="w-3.5 h-3.5 text-primary" />
-              <span className="text-xs font-bold text-text-primary">
-                Bảng màu Heatmap Lịch
-              </span>
-            </div>
-
-            <HeatmapThemeSelector
-              currentTheme={settings.heatmapTheme || 'forest'}
-              onSelectTheme={handleChangeHeatmapTheme}
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* 5. Mục QUẢN LÝ DỮ LIỆU */}
-      <div className="flex flex-col gap-2">
-        <span className="text-xs font-black uppercase tracking-wider text-text-muted px-1">
-          Dữ Liệu & Danh Mục
-        </span>
-
-        <div className="flex flex-col rounded-3xl bg-surface dark:bg-surface-elevated border border-border/80 shadow-soft overflow-hidden">
           {/* Quản lý danh mục */}
           <div
             onClick={() => setIsCategoryManagerOpen(true)}
@@ -460,18 +366,62 @@ export default function ProfilePage() {
                 <Tags className="w-4 h-4" />
               </div>
               <div className="flex flex-col">
-                <span className="text-xs font-bold text-text-primary">
-                  Quản Lý Danh Mục
-                </span>
+                <span className="text-xs font-bold text-text-primary">Quản Lý Danh Mục</span>
                 <span className="text-[11px] text-text-muted">
                   {categories.length} danh mục (thêm, sửa, ẩn danh mục)
                 </span>
               </div>
             </div>
-
             <ChevronRight className="w-4 h-4 text-text-muted" />
           </div>
 
+          {/* Heatmap chi tiêu */}
+          <div className="flex flex-col gap-2.5 p-3.5 border-b border-border/60">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-2xl bg-primary-soft text-primary flex items-center justify-center">
+                <Palette className="w-4 h-4" />
+              </div>
+              <span className="text-xs font-bold text-text-primary">Heatmap Chi Tiêu</span>
+            </div>
+
+            <HeatmapThemeSelector
+              currentTheme={settings.heatmapTheme || 'forest'}
+              onSelectTheme={handleChangeHeatmapTheme}
+            />
+          </div>
+
+          {/* Đặt lại dữ liệu mẫu */}
+          <div className="flex items-center justify-between gap-3 p-3.5">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-9 h-9 rounded-2xl bg-status-danger-soft text-status-danger flex items-center justify-center shrink-0">
+                <RotateCcw className="w-4 h-4" />
+              </div>
+              <div className="flex flex-col min-w-0">
+                <span className="text-xs font-bold text-text-primary truncate">Đặt Lại Dữ Liệu Mẫu</span>
+                <span className="text-[11px] text-text-muted truncate">
+                  Xóa dữ liệu hiện tại và nạp lại demo ban đầu
+                </span>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setIsResetConfirmOpen(true)}
+              className="px-3 py-1.5 rounded-xl bg-status-danger-soft text-status-danger text-xs font-bold hover:bg-status-danger hover:text-white active:scale-95 transition-all shrink-0"
+            >
+              Đặt lại
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* 4. DỮ LIỆU */}
+      <div className="flex flex-col gap-2">
+        <span className="text-xs font-black uppercase tracking-wider text-text-muted px-1">
+          Dữ Liệu
+        </span>
+
+        <div className="flex flex-col rounded-3xl bg-surface dark:bg-surface-elevated border border-border/80 shadow-soft overflow-hidden">
           {/* Xuất dữ liệu JSON */}
           <div
             onClick={handleExportJSON}
@@ -482,15 +432,10 @@ export default function ProfilePage() {
                 <Download className="w-4 h-4" />
               </div>
               <div className="flex flex-col">
-                <span className="text-xs font-bold text-text-primary">
-                  Xuất Dữ Liệu Dự Phòng (JSON)
-                </span>
-                <span className="text-[11px] text-text-muted">
-                  Tải về toàn bộ số liệu để lưu trữ
-                </span>
+                <span className="text-xs font-bold text-text-primary">Xuất Dữ Liệu Dự Phòng (JSON)</span>
+                <span className="text-[11px] text-text-muted">Tải về toàn bộ số liệu để lưu trữ</span>
               </div>
             </div>
-
             <ChevronRight className="w-4 h-4 text-text-muted" />
           </div>
 
@@ -504,15 +449,10 @@ export default function ProfilePage() {
                 <Upload className="w-4 h-4" />
               </div>
               <div className="flex flex-col">
-                <span className="text-xs font-bold text-text-primary">
-                  Nhập Dữ Liệu Từ Tệp (JSON)
-                </span>
-                <span className="text-[11px] text-text-muted">
-                  Khôi phục dữ liệu từ tệp sao lưu
-                </span>
+                <span className="text-xs font-bold text-text-primary">Nhập Dữ Liệu Từ Tệp (JSON)</span>
+                <span className="text-[11px] text-text-muted">Khôi phục dữ liệu từ tệp sao lưu</span>
               </div>
             </div>
-
             <ChevronRight className="w-4 h-4 text-text-muted" />
           </div>
         </div>
@@ -525,50 +465,6 @@ export default function ProfilePage() {
           accept=".json,application/json"
           className="hidden"
         />
-      </div>
-
-      {/* 6. Mục HỆ THỐNG / ĐẶT LẠI DỮ LIỆU */}
-      <div className="flex flex-col gap-2">
-        <span className="text-xs font-black uppercase tracking-wider text-status-danger px-1">
-          Hệ Thống
-        </span>
-
-        <div className="p-3.5 rounded-3xl bg-surface dark:bg-surface-elevated border border-border/80 shadow-soft flex items-center justify-between">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-9 h-9 rounded-2xl bg-status-danger-soft text-status-danger flex items-center justify-center shrink-0">
-              <RotateCcw className="w-4 h-4" />
-            </div>
-            <div className="flex flex-col min-w-0">
-              <span className="text-xs font-bold text-text-primary truncate">
-                Đặt Lại Dữ Liệu Mẫu
-              </span>
-              <span className="text-[11px] text-text-muted truncate">
-                Xóa dữ liệu hiện tại và nạp lại demo ban đầu
-              </span>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => setIsResetConfirmOpen(true)}
-            className="px-3 py-1.5 rounded-xl bg-status-danger-soft text-status-danger text-xs font-bold hover:bg-status-danger hover:text-white active:scale-95 transition-all shrink-0"
-          >
-            Đặt lại
-          </button>
-        </div>
-      </div>
-
-      {/* 7. Thông Báo Phạm Vi Thiết Kế Phase 1 */}
-      <div className="p-4 rounded-3xl bg-surface dark:bg-surface-elevated border border-border/80 shadow-soft flex flex-col gap-2">
-        <div className="flex items-center gap-2 text-primary">
-          <ShieldCheck className="w-4 h-4" />
-          <h3 className="text-xs font-bold uppercase tracking-wider text-text-primary">
-            Nguyên Tắc Thiết Kế Mooney V1
-          </h3>
-        </div>
-        <p className="text-xs text-text-secondary leading-relaxed">
-          Mooney tôn trọng sự thanh thản trong tâm trí. Ứng dụng không phân tán tài khoản ngân hàng, không phức tạp hóa danh mục ví, và lưu trữ an toàn ngay trên trình duyệt của bạn (Local-first).
-        </p>
       </div>
 
       {/* 8. About Mooney & Footer */}

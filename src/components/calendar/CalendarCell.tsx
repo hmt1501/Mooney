@@ -53,8 +53,9 @@ export function CalendarCell({
       ? getHeatLevel(expenseAmount, thresholds)
       : 'none';
 
-  const hasIncome = !isFuture && isCurrentMonth && incomeAmount > 0;
-  const hasExpense = !isFuture && isCurrentMonth && expenseAmount > 0;
+  // Ngày tương lai vẫn hiển thị số tiền đã ghi (dạng mờ, "dự kiến"), chưa tính vào số dư
+  const hasIncome = isCurrentMonth && incomeAmount > 0;
+  const hasExpense = isCurrentMonth && expenseAmount > 0;
 
   return (
     <button
@@ -68,29 +69,29 @@ export function CalendarCell({
         }
         onQuickAdd(dateStr);
       }}
-      aria-label={`Ngày ${dateStr}, chi tiêu ${expenseAmount} đồng, thu nhập ${incomeAmount} đồng`}
+      aria-label={`Ngày ${dateStr}${isFuture ? ' (dự kiến)' : ''}, chi tiêu ${expenseAmount} đồng, thu nhập ${incomeAmount} đồng`}
       className={cn(
-        'relative aspect-square w-full rounded-xl p-1 flex flex-col items-center justify-between transition-all select-none',
+        'relative aspect-square w-full rounded-xl p-1 flex flex-col items-center transition-all select-none',
         'active:scale-95 touch-manipulation focus:outline-none',
         // Màu chữ & độ mờ theo tháng
         isCurrentMonth ? 'text-text-primary' : 'text-text-disabled opacity-40',
-        // Heatmap background
+        // Nền xám nhạt để phân biệt ô ngày với nền lịch (Heatmap ghi đè)
+        heatLevel === 'none' && 'bg-surface-secondary',
         heatLevel === 'low' && 'bg-heat-low',
         heatLevel === 'medium' && 'bg-heat-medium',
         heatLevel === 'high' && 'bg-heat-high',
-        heatLevel === 'none' && isCurrentMonth && 'hover:bg-surface-secondary',
-        // Viền khi được chọn (Selected state)
-        isSelected && 'ring-2 ring-primary ring-offset-1 ring-offset-background font-bold',
-        // Chỉ báo ngày hôm nay (Today state)
-        isToday && !isSelected && 'border border-primary/50'
+        // Viền: hôm nay đậm, các ngày khác nhạt
+        isToday ? 'border-2 border-primary' : 'border border-border/60',
+        // Ngày đang chọn (không phải hôm nay): vòng sáng nhẹ
+        isSelected && !isToday && 'ring-2 ring-primary/40 font-bold'
       )}
     >
       {/* 1. Số ngày */}
-      <div className="flex items-center justify-center w-full">
+      <div className="flex items-center justify-center w-full shrink-0">
         <span
           className={cn(
             'text-[11px] font-semibold leading-none',
-            isToday && 'w-5 h-5 rounded-full bg-primary text-primary-content flex items-center justify-center font-bold',
+            isToday && 'text-primary font-black',
             !isToday && isSelected && 'text-primary font-bold'
           )}
         >
@@ -98,19 +99,29 @@ export function CalendarCell({
         </span>
       </div>
 
-      {/* 2. Chỉ báo thu nhập (+tiền) nếu có */}
-      {hasIncome && (
-        <span className="text-[8.5px] font-bold text-status-income leading-none truncate max-w-full tabular-nums">
-          +{formatCompactCurrency(incomeAmount)}
-        </span>
-      )}
+      {/* 2. Số tiền thu / chi nằm giữa ô */}
+      <div
+        className={cn(
+          'flex-1 w-full min-h-0 flex flex-col items-center justify-center gap-0.5 text-center',
+          isFuture && 'opacity-60'
+        )}
+      >
+        {hasIncome && (
+          <span
+            className={cn(
+              'text-[8.5px] font-bold leading-none truncate max-w-full tabular-nums',
+              isFuture ? 'text-text-muted' : 'text-status-income'
+            )}
+          >
+            +{formatCompactCurrency(incomeAmount)}
+          </span>
+        )}
 
-      {/* 3. Số tiền chi tiêu hàng ngày */}
-      <div className="w-full text-center">
         {hasExpense ? (
           <span
             className={cn(
-              'text-[9px] font-extrabold leading-none block truncate tabular-nums',
+              'text-[9px] font-extrabold leading-none block truncate max-w-full tabular-nums',
+              isFuture && 'text-text-muted',
               heatLevel === 'low' && 'text-heat-low-text',
               heatLevel === 'medium' && 'text-heat-medium-text',
               heatLevel === 'high' && 'text-heat-high-text'
@@ -119,7 +130,9 @@ export function CalendarCell({
             {formatCompactCurrency(expenseAmount)}
           </span>
         ) : (
-          isCurrentMonth && !isFuture && (
+          !hasIncome &&
+          isCurrentMonth &&
+          !isFuture && (
             <span className="text-[8px] text-text-muted/40 font-medium leading-none block">
               -
             </span>

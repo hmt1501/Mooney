@@ -7,6 +7,7 @@ import { TopHeader } from '@/components/layout/TopHeader';
 import { BottomNavigation } from '@/components/layout/BottomNavigation';
 import { FloatingActions } from '@/components/layout/FloatingActions';
 import { MooneyDataProvider } from '@/hooks/useMooneyData';
+import { SelectedMonthProvider } from '@/hooks/useSelectedMonth';
 import { AuthProvider } from '@/lib/auth/authContext';
 
 export const metadata: Metadata = {
@@ -36,10 +37,7 @@ export const viewport: Viewport = {
   maximumScale: 1,
   userScalable: false,
   viewportFit: 'cover',
-  themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#FAF9F5' },
-    { media: '(prefers-color-scheme: dark)', color: '#181C19' },
-  ],
+  themeColor: '#FAF9F5',
 };
 
 export default function RootLayout({
@@ -54,14 +52,16 @@ export default function RootLayout({
           <ToastProvider>
             <AuthProvider>
               <MooneyDataProvider>
-                <AppShell>
-                  <TopHeader />
-                  <div className="flex-1 pb-24 px-4 overflow-y-auto">
-                    {children}
-                  </div>
-                  <FloatingActions />
-                  <BottomNavigation />
-                </AppShell>
+                <SelectedMonthProvider>
+                  <AppShell>
+                    <TopHeader />
+                    <div className="flex-1 pb-24 px-4 overflow-y-auto">
+                      {children}
+                    </div>
+                    <FloatingActions />
+                    <BottomNavigation />
+                  </AppShell>
+                </SelectedMonthProvider>
               </MooneyDataProvider>
             </AuthProvider>
           </ToastProvider>

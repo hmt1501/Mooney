@@ -189,7 +189,8 @@ describe('Production Readiness Accounting Audit', () => {
     expect(octRecap.totalIncome).toBe(0);
 
     // 4. Số dư khả dụng toàn cục phải phản ánh cả 2 tháng: 5M + 5M - 150k - 500k = 9_350_000
-    const totalBalance = calculateAvailableBalance(5_000_000, transactions);
+    // (tính tại cuối tháng 10 để cả 2 tháng đều đã diễn ra)
+    const totalBalance = calculateAvailableBalance(5_000_000, transactions, undefined, '2026-10-31');
     expect(totalBalance).toBe(9_350_000);
   });
 

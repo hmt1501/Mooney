@@ -155,11 +155,6 @@ export function VoiceExpenseSheet({ isOpen, onClose }: VoiceExpenseSheetProps) {
     setStep({ kind: 'typing', notice: supported ? null : 'unsupported' });
   };
 
-  const openManual = () => {
-    stopSession();
-    showReview(null, null);
-  };
-
   const submitTyped = (event?: React.FormEvent) => {
     event?.preventDefault();
     const text = typed.trim();
@@ -255,7 +250,7 @@ export function VoiceExpenseSheet({ isOpen, onClose }: VoiceExpenseSheetProps) {
     const Icon = code === 'network' ? WifiOff : code === 'mic_denied' || code === 'mic_not_found' ? MicOff : null;
 
     return (
-      <FlowStateView {...view} onManualEntry={openManual}>
+      <FlowStateView {...view}>
         {Icon ? (
           <div className="flex items-center justify-center w-16 h-16 rounded-3xl bg-primary-soft text-primary">
             <Icon className="w-7 h-7 stroke-[1.8]" />
@@ -269,7 +264,7 @@ export function VoiceExpenseSheet({ isOpen, onClose }: VoiceExpenseSheetProps) {
     listening: 'Nói khoản chi',
     typing: 'Gõ khoản chi',
     error: 'Nói khoản chi',
-    review: step.kind === 'review' && step.draft ? 'Kiểm tra khoản chi' : 'Ghi khoản chi',
+    review: 'Kiểm tra khoản chi',
   };
 
   return (
@@ -389,9 +384,6 @@ export function VoiceExpenseSheet({ isOpen, onClose }: VoiceExpenseSheetProps) {
               Tiếp tục
             </button>
           </div>
-          <button type="button" onClick={openManual} className="text-xs font-bold text-text-secondary hover:text-primary">
-            Tự nhập khoản chi
-          </button>
         </form>
       )}
 

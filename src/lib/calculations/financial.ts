@@ -2,6 +2,7 @@ import { Transaction, TransactionType } from '@/types/transaction';
 import { Category } from '@/types/category';
 import { IncomeItem } from '@/types/income';
 import { calculateRealizedIncome } from './income';
+import { toDateString } from '@/lib/utils/date';
 import {
   DailyTotals,
   CategoryTotal,
@@ -21,6 +22,8 @@ import {
  * - Income làm tăng số dư (chỉ tính realized income đã nhận).
  * - Expense làm giảm số dư.
  * - Hỗ trợ cả Phase 1 legacy (transactions type='income') và Phase 2 (IncomeItem).
+ * - Giao dịch có ngày sau ngày tính (tương lai) vẫn được lưu nhưng CHƯA tính vào số dư
+ *   cho đến khi tới ngày đó (nhất quán với realized income).
  */
 export function calculateAvailableBalance(
   startingBalance: number,
@@ -29,7 +32,8 @@ export function calculateAvailableBalance(
   targetDateStr?: string
 ): number {
   let balance = startingBalance;
-  const today = targetDateStr || new Date().toISOString().split('T')[0];
+  // Ngày theo giờ máy (không dùng UTC, tránh lệch ngày ở múi giờ +7)
+  const today = targetDateStr || toDateString(new Date());
 
   // 1. Cộng thu nhập thực tế từ danh sách Incomes (Phase 2 domain model)
   if (incomes !== undefined && incomes.length > 0) {
@@ -40,6 +44,7 @@ export function calculateAvailableBalance(
   // - Giao dịch 'income' trực tiếp -> tăng số dư
   // - Giao dịch 'expense' -> giảm số dư
   for (const tx of transactions) {
+    if (tx.date > today) continue;
     if (tx.type === 'income') {
       balance += tx.amount;
     } else if (tx.type === 'expense') {
@@ -48,6 +53,28 @@ export function calculateAvailableBalance(
   }
 
   return balance;
+}
+
+/**
+ * Giá trị chi tiêu trung bình mỗi ngày có chi tiêu trong tháng (tính đến ngày upToDateStr).
+ * = Tổng chi trong tháng / Số ngày có phát sinh khoản chi. Trả về 0 nếu chưa có chi tiêu.
+ */
+export function calculateAverageSpendingPerActiveDay(
+  transactions: Transaction[],
+  monthPrefix: string, // 'YYYY-MM'
+  upToDateStr: string // 'YYYY-MM-DD'
+): number {
+  let total = 0;
+  const activeDays = new Set<string>();
+
+  for (const tx of transactions) {
+    if (tx.type !== 'expense' || tx.amount <= 0) continue;
+    if (!tx.date.startsWith(monthPrefix) || tx.date > upToDateStr) continue;
+    total += tx.amount;
+    activeDays.add(tx.date);
+  }
+
+  return activeDays.size > 0 ? Math.round(total / activeDays.size) : 0;
 }
 
 /**
